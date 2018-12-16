@@ -1,0 +1,29 @@
+{
+  "name": "texel",
+  "version": "0.0.1",
+  "description": "A Texel to JS compiler",
+  "main": "index.js",
+  "repository": "https://github.com/texel-lang/bootstrap",
+  "author": "Dirk de Visser <dirkdev98@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "@zeit/ncc": "^0.5.5"
+  },
+  "devDependencies": {
+    "@types/node": "^10.12.12",
+    "concurrently": "^4.1.0",
+    "nodemon": "^1.18.7",
+    "typescript": "^3.2.2"
+  },
+  "scripts": {
+    "build": "ncc build src/index.ts -o dist",
+    "build:watch": "nodemon -e ts --watch src --exec 'yarn build'",
+    "start": "node dist/index.js",
+    "start:watch": "nodemon --watch dist --exec 'yarn start'",
+    "debug": "node --inspect=3333 dist/index.js",
+    "debug:watch": "nodemon -L --watch dist/ --exec 'yarn debug'",
+    "build:debug": "concurrently --names \"BUILD,DEBUG\" -i \"yarn build:watch\" \"yarn debug:watch ./test/parser.txl\" ",
+    "dev": "ncc run src/index.ts",
+    "dev:watch": "nodemon -e ts --watch src --exec 'yarn dev'"
+  }
+}

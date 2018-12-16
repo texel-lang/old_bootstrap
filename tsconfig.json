@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "baseUrl": "./src",
+    "diagnostics": true,
+    "downlevelIteration": true,
+    "forceConsistentCasingInFileNames": true,
+    "module": "commonjs",
+    "noEmitOnError": true,
+    "noImplicitAny": true,
+    "pretty": true,
+    "strict": true,
+    "target": "es2018",
+    "moduleResolution": "node"
+  }
+}

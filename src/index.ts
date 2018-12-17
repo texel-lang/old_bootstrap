@@ -1,3 +1,4 @@
+import { compile }   from "./compiler";
 import { parseFile } from "./parser";
 
 function getArgs() {
@@ -16,7 +17,11 @@ function main() {
 
 function compileFile(fileName: string) {
    try {
-      parseFile(fileName);
+      console.time("compile");
+      const tree = parseFile(fileName);
+      const output = compile(tree);
+      console.timeEnd("compile");
+      console.log(output);
    } catch (e) {
       // FIXME: Need to exit gracefully for nodemon...
       console.error(e);

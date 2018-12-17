@@ -7,7 +7,7 @@
   "author": "Dirk de Visser <dirkdev98@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "@zeit/ncc": "^0.5.5"
+    "@zeit/ncc": "^0.6.0"
   },
   "devDependencies": {
     "@types/node": "^10.12.15",
@@ -19,9 +19,9 @@
     "build": "ncc build src/index.ts -o dist",
     "build:watch": "nodemon -e ts --watch src --exec 'yarn build'",
     "start": "node dist/index.js",
-    "start:watch": "nodemon --watch dist --exec 'yarn start'",
+    "start:watch": "nodemon --watch dist/ --exec 'yarn start'",
     "debug": "node --inspect=3333 dist/index.js",
-    "debug:watch": "nodemon -L --watch dist/ --exec 'yarn debug'",
+    "debug:watch": "nodemon -L -e js,js.map --watch dist/ --watch test/ --exec 'yarn debug'",
     "build:debug": "concurrently --names \"BUILD,DEBUG\" -i \"yarn build:watch\" \"yarn debug:watch ./test/parser.txl\" ",
     "dev": "ncc run src/index.ts",
     "dev:watch": "nodemon -e ts --watch src --exec 'yarn dev'"

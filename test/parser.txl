@@ -1,20 +1,24 @@
-struct Foo {
-    int bar;
-    string child = "test";
+struct Point {
+    double x = true;
+    double y;
 }
 
-fn Bar(): double {
-    this.bar = 5;
-
-    return 1.532;
+fn createPoint(double x, double y): Point {
+    return {
+        .x = x,
+        .y = y,
+    };
 }
 
 fn main(): void {
-    if (true) {
-        loop (false) {
-            return 'c';
-        }
-    } else if (false) {
+    Point point = createPoint(1, 2);
+    double x = createPoint(3, 4).x;
 
-    } else {}
+    double y = point.y;
+
+    boolean bool = false;
+    double thing = 1 + 2.45;
+    loop (bool) {
+        bool = !bool;
+    }
 }

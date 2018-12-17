@@ -1,3 +1,5 @@
+import { isNil } from "./utils";
+
 export interface TexelFile {
    structs: StructDeclaration[];
    functions: FunctionDeclaration[];
@@ -41,9 +43,17 @@ export interface VariableDeclaration extends Statement {
    expression?: Expression;
 }
 
+export function isVariableDeclaration(stmt: Statement): stmt is VariableDeclaration {
+   return stmt.statementType === StatementType.VariableDeclaration;
+}
+
 export interface ExpressionStatement extends Statement {
    statementType: StatementType.ExpressionStatement;
    expression: Expression;
+}
+
+export function isExpressionStatement(stmt: Statement): stmt is ExpressionStatement {
+   return stmt.statementType === StatementType.ExpressionStatement;
 }
 
 export interface LoopStatement extends Statement {
@@ -52,10 +62,18 @@ export interface LoopStatement extends Statement {
    statements: Statement[];
 }
 
+export function isLoopStatement(stmt: Statement): stmt is LoopStatement {
+   return stmt.statementType === StatementType.LoopStatement;
+}
+
 export interface LoopControlStatement extends Statement {
    statementType: StatementType.LoopControlStatement;
    isContinue: boolean;
    isBreak: boolean;
+}
+
+export function isLoopControlStatement(stmt: Statement): stmt is LoopControlStatement {
+   return stmt.statementType === StatementType.LoopControlStatement;
 }
 
 export interface IfElseStatement extends Statement {
@@ -66,9 +84,17 @@ export interface IfElseStatement extends Statement {
    elseStatements: Statement[];
 }
 
+export function isIfElseStatement(stmt: Statement): stmt is IfElseStatement {
+   return stmt.statementType === StatementType.IfElseStatement;
+}
+
 export interface ReturnStatement extends Statement {
    statementType: StatementType.ReturnStatement;
    expression?: Expression;
+}
+
+export function isReturnStatement(stmt: Statement): stmt is ReturnStatement {
+   return stmt.statementType === StatementType.ReturnStatement;
 }
 
 export const enum ExpressionType {
@@ -77,6 +103,7 @@ export const enum ExpressionType {
 
 export interface Expression {
    expressionType: ExpressionType;
+   producedType?: string;
 }
 
 export interface Assignment extends Expression {
@@ -85,7 +112,7 @@ export interface Assignment extends Expression {
 }
 
 export function isAssignment(obj: any): obj is Assignment {
-   return obj.expressionType && obj.expressionType === ExpressionType.Assignment;
+   return !isNil(obj.expressionType) && obj.expressionType === ExpressionType.Assignment;
 }
 
 // @formatter:off
@@ -139,14 +166,6 @@ export interface MemberAccess extends Expression {
 
 export function isMemberAccess(obj: any): obj is MemberAccess {
    return obj.expressionType && obj.expressionType === ExpressionType.MemberAccess;
-}
-
-export interface IndexAccess extends Expression {
-   // TODO:
-}
-
-export function isIndexAccess(obj: any): obj is IndexAccess {
-   return obj.expressionType && obj.expressionType === ExpressionType.IndexAccess;
 }
 
 export interface BooleanLiteral extends Expression {

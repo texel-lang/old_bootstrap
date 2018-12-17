@@ -1,5 +1,3 @@
-import { consoleObject, readFile } from "../utils";
-import { getTokens, Token, TokenType } from "./Token";
 import {
    Assignment,
    BinaryExpression,
@@ -32,7 +30,9 @@ import {
    StructLiteralAssignment,
    TexelFile,
    VariableDeclaration,
-} from "./Tree";
+}                                      from "../Tree";
+import { readFile }                    from "../utils";
+import { getTokens, Token, TokenType } from "./Token";
 
 export interface Parser {
    tokens: Token[];
@@ -54,13 +54,8 @@ export function parseFile(fileName: string): TexelFile {
       tokenLength: tokens.length,
       currentIdx: 0,
    };
-   const result = parseTexelFile(info);
 
-   consoleObject({
-      info,
-      result,
-   });
-   return result;
+   return parseTexelFile(info);
 }
 
 function isAtEnd(parser: Parser): boolean {
@@ -219,7 +214,7 @@ function parseFunctionDeclaration(parser: Parser): FunctionDeclaration {
 
    consumeOrThrow(parser, TokenType.LEFT_CURLY_BRACKET);
    const statements: Statement[] = parseStatementBlock(parser);
-   consoleObject(statements);
+
    consumeOrThrow(parser, TokenType.RIGHT_CURLY_BRACKET);
    return {
       name,
@@ -328,7 +323,7 @@ function parseLoop(parser: Parser): LoopStatement {
    consumeOrThrow(parser, TokenType.RIGHT_PARENTHESIS);
 
    consumeOrThrow(parser, TokenType.LEFT_CURLY_BRACKET);
-   const statements: Statement[] = parseStatementBlock(parser);
+   const statements: Statement[] = parseStatementBlock(parser, true);
    consumeOrThrow(parser, TokenType.RIGHT_CURLY_BRACKET);
 
    return {
@@ -491,6 +486,7 @@ function parseLogicOr(parser: Parser): Expression {
 
    while (!isAtEnd(parser)) {
       if (peekType(parser) === TokenType.PIPE_PIPE) {
+         consumeOrThrow(parser, TokenType.PIPE_PIPE);
          expr = {
             expressionType: ExpressionType.Binary,
             left: expr,
@@ -510,6 +506,7 @@ function parseLogicAnd(parser: Parser): Expression {
 
    while (!isAtEnd(parser)) {
       if (peekType(parser) === TokenType.AND_AND) {
+         consumeOrThrow(parser, TokenType.AND_AND);
          expr = {
             expressionType: ExpressionType.Binary,
             left: expr,
@@ -529,6 +526,7 @@ function parseEquality(parser: Parser): Expression {
 
    while (!isAtEnd(parser)) {
       if (peekType(parser) === TokenType.EQUAL_EQUAL) {
+         consumeOrThrow(parser, TokenType.EQUAL_EQUAL);
          expr = {
             expressionType: ExpressionType.Binary,
             left: expr,
@@ -536,6 +534,7 @@ function parseEquality(parser: Parser): Expression {
             right: parseComparison(parser),
          } as BinaryExpression;
       } else if (peekType(parser) === TokenType.BANG_EQUAL) {
+         consumeOrThrow(parser, TokenType.BANG_EQUAL);
          expr = {
             expressionType: ExpressionType.Binary,
             left: expr,
@@ -555,6 +554,7 @@ function parseComparison(parser: Parser): Expression {
 
    while (!isAtEnd(parser)) {
       if (peekType(parser) === TokenType.GREATER) {
+         consumeOrThrow(parser, TokenType.GREATER);
          expr = {
             expressionType: ExpressionType.Binary,
             left: expr,
@@ -562,6 +562,7 @@ function parseComparison(parser: Parser): Expression {
             right: parseAddition(parser),
          } as BinaryExpression;
       } else if (peekType(parser) === TokenType.GREATER_EQUAL) {
+         consumeOrThrow(parser, TokenType.GREATER_EQUAL);
          expr = {
             expressionType: ExpressionType.Binary,
             left: expr,
@@ -569,6 +570,7 @@ function parseComparison(parser: Parser): Expression {
             right: parseAddition(parser),
          } as BinaryExpression;
       } else if (peekType(parser) === TokenType.SMALLER) {
+         consumeOrThrow(parser, TokenType.SMALLER);
          expr = {
             expressionType: ExpressionType.Binary,
             left: expr,
@@ -576,6 +578,7 @@ function parseComparison(parser: Parser): Expression {
             right: parseAddition(parser),
          } as BinaryExpression;
       } else if (peekType(parser) === TokenType.SMALLER_EQUAL) {
+         consumeOrThrow(parser, TokenType.SMALLER_EQUAL);
          expr = {
             expressionType: ExpressionType.Binary,
             left: expr,
@@ -595,6 +598,7 @@ function parseAddition(parser: Parser): Expression {
 
    while (!isAtEnd(parser)) {
       if (peekType(parser) === TokenType.PLUS) {
+         consumeOrThrow(parser, TokenType.PLUS);
          expr = {
             expressionType: ExpressionType.Binary,
             left: expr,
@@ -602,6 +606,7 @@ function parseAddition(parser: Parser): Expression {
             right: parseMultiplication(parser),
          } as BinaryExpression;
       } else if (peekType(parser) === TokenType.DASH) {
+         consumeOrThrow(parser, TokenType.DASH);
          expr = {
             expressionType: ExpressionType.Binary,
             left: expr,
@@ -621,6 +626,7 @@ function parseMultiplication(parser: Parser): Expression {
 
    while (!isAtEnd(parser)) {
       if (peekType(parser) === TokenType.STAR) {
+         consumeOrThrow(parser, TokenType.STAR);
          expr = {
             expressionType: ExpressionType.Binary,
             left: expr,
@@ -628,6 +634,7 @@ function parseMultiplication(parser: Parser): Expression {
             right: parsePrefix(parser),
          } as BinaryExpression;
       } else if (peekType(parser) === TokenType.SLASH) {
+         consumeOrThrow(parser, TokenType.SLASH);
          expr = {
             expressionType: ExpressionType.Binary,
             left: expr,
@@ -645,6 +652,7 @@ function parseMultiplication(parser: Parser): Expression {
 function parsePrefix(parser: Parser): Expression {
    switch (peekType(parser)) {
       case TokenType.DASH_DASH:
+         consumeOrThrow(parser, TokenType.DASH_DASH);
          return {
             expressionType: ExpressionType.Binary,
             left: parsePostfix(parser),
@@ -655,6 +663,7 @@ function parsePrefix(parser: Parser): Expression {
             } as IntLiteral,
          } as BinaryExpression;
       case TokenType.DASH:
+         consumeOrThrow(parser, TokenType.DASH);
          return {
             expressionType: ExpressionType.Binary,
             left: {
@@ -665,6 +674,7 @@ function parsePrefix(parser: Parser): Expression {
             right: parsePostfix(parser),
          } as BinaryExpression;
       case TokenType.PLUS_PLUS:
+         consumeOrThrow(parser, TokenType.PLUS_PLUS);
          return {
             expressionType: ExpressionType.Binary,
             left: parsePostfix(parser),
@@ -675,6 +685,7 @@ function parsePrefix(parser: Parser): Expression {
             } as IntLiteral,
          } as BinaryExpression;
       case TokenType.BANG:
+         consumeOrThrow(parser, TokenType.BANG);
          return {
             expressionType: ExpressionType.Negate,
             expression: parsePostfix(parser),
@@ -804,6 +815,9 @@ function parseStructLiteral(parser: Parser): Expression {
 
       expectOrThrow(parser, TokenType.IDENTIFIER);
       const name = getNext(parser)!!.value;
+
+      consumeOrThrow(parser, TokenType.EQUAL);
+
       const value = parseExpression(parser);
 
       if (!consume(parser, TokenType.COMMA) && peekType(parser) !=
@@ -817,8 +831,10 @@ function parseStructLiteral(parser: Parser): Expression {
       });
    }
 
+   consumeOrThrow(parser, TokenType.RIGHT_CURLY_BRACKET);
+
    return {
-      expressionType: ExpressionType.StringLiteral,
+      expressionType: ExpressionType.StructLiteral,
       assignments,
    } as StructLiteral;
 }

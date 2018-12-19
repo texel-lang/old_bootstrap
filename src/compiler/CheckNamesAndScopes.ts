@@ -219,8 +219,11 @@ function walkAssignment(
    data: CompilerData,
    expr: Assignment,
 ) {
-   if (!data.currentScope.containsNameRecursive(expr.name)) {
-      throw new Error(`${ expr.name } is used before declaration`);
+   if (isIdentifier(expr.name)) {
+      if (!data.currentScope.containsNameRecursive(expr.name.identifier)) {
+         throw new Error(`${ expr.name } is used before declaration`);
+      }
+   } else {
    }
    walkExpression(data, expr.expression);
 }
@@ -255,8 +258,16 @@ function walkMemberAccess(
    data: CompilerData,
    expr: MemberAccess,
 ) {
-   walkExpression(data, expr.expression);
-   // TODO: Check member name, but can only do if type of expression is known
+   if (isIdentifier(expr.expression)) {
+      walkIdentifier(data, expr.expression);
+   } else if (isCall(expr.expression)) {
+      walkCall(data, expr.expression);
+   } else if (isMemberAccess(expr.expression)) {
+      walkMemberAccess(data, expr.expression);
+   }
+
+   // Member name checking happens in a next compiler pass
+   // See: CheckTypes # calculateMemberAccessReturnType()
 }
 
 function walkBoolean(

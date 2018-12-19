@@ -14,7 +14,7 @@ import {
    FunctionParameter,
    Identifier,
    IfElseStatement,
-   IntLiteral,
+   IntLiteral, isCall,
    isIdentifier,
    isMemberAccess,
    LoopControlStatement,
@@ -418,7 +418,7 @@ function parseAssignment(parser: Parser): Expression {
    if (!isIdentifier(expr) && !isMemberAccess(expr)) {
       return expr;
    }
-   const name = isIdentifier(expr) ? expr.identifier : (expr as MemberAccess).member;
+   const name = { ...expr };
 
    switch (peekType(parser)) {
       case TokenType.EQUAL:
@@ -702,6 +702,12 @@ function parsePostfix(parser: Parser): Expression {
       if (peekTokenType === TokenType.DOT) {
          consumeOrThrow(parser, TokenType.DOT);
          expectOrThrow(parser, TokenType.IDENTIFIER);
+
+         if (!isIdentifier(intermediate) && !isCall(intermediate) &&
+             !isMemberAccess(intermediate)) {
+            throw new Error(
+               "Can only call Member access on identifiers, function calls or previous member accessing");
+         }
 
          intermediate = {
             expressionType: ExpressionType.MemberAccess,

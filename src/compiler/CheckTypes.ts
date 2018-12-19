@@ -1,7 +1,7 @@
 import {
    Assignment,
    BinaryExpression,
-   BinaryNegate,
+   BinaryNegate, BinaryOp,
    BooleanLiteral,
    Call,
    CharLiteral,
@@ -78,7 +78,7 @@ export interface TypeCheckData {
 export function checkTypes(
    data: CompilerData,
    file: TexelFile,
-) {
+): TypeCheckData {
    const typeCheckData: TypeCheckData = {
       stack: new Stack<NameTypePair>(),
       structs: {},
@@ -96,6 +96,8 @@ export function checkTypes(
 
    file.functions.forEach(
       it => walkFunctionBody(typeCheckData, it));
+
+   return typeCheckData;
 }
 
 function registerInternalStructs(data: TypeCheckData) {
@@ -206,7 +208,7 @@ function walkLoopStatement(
    data: TypeCheckData,
    stmt: LoopStatement,
 ) {
-   checkExpressionType(data, ["boolean", "int"], stmt.expression);
+   checkExpressionType(data, ["boolean", "int", "double"], stmt.expression);
    stmt.statements.forEach(
       it => walkStatement(data, it));
 }
@@ -215,12 +217,12 @@ function walkIfElseStatement(
    data: TypeCheckData,
    stmt: IfElseStatement,
 ) {
-   checkExpressionType(data, ["boolean", "int"], stmt.expression);
+   checkExpressionType(data, ["boolean", "int", "double"], stmt.expression);
    stmt.statements.forEach(
       it => walkStatement(data, it));
    stmt.elseIfs.forEach(
       elseIf => {
-         checkExpressionType(data, ["boolean", "int"], elseIf.expression);
+         checkExpressionType(data, ["boolean", "int", "double"], elseIf.expression);
          elseIf.statements.forEach(
             it => walkStatement(data, it));
       });
@@ -294,12 +296,21 @@ function walkAssignment(
    expectedTypes: string[],
    expr: Assignment,
 ) {
-   const variable = data.stack.find(
-      it => it.name === expr.name);
-   if (variable === undefined) {
-      throwTypeError(["UNKNOWN"], "NOTHING");
-   } else {
-      checkExpressionType(data, [variable.type], expr.expression);
+   if (isIdentifier(expr.name)) {
+      const typeInfo = data.stack.find(
+         it => it.name === (expr.name as Identifier).identifier);
+      if (isNil(typeInfo)) {
+         throwTypeError(["anything"], "unknown");
+      } else {
+         checkExpressionType(data, [typeInfo.type], expr.expression);
+      }
+   } else if (isMemberAccess(expr.name)) {
+      const typeInfo = calculateMemberAccessReturnType(data, expr.name);
+      if (isNil(typeInfo)) {
+         throwTypeError(["anything"], "unknown");
+      } else {
+         checkExpressionType(data, [typeInfo], expr.expression);
+      }
    }
 }
 
@@ -312,36 +323,22 @@ function walkBinary(
    const doubleIdx = expectedTypes.indexOf("double");
    const stringIdx = expectedTypes.indexOf("string");
    const charIdx = expectedTypes.indexOf("char");
+   const booleanIdx = expectedTypes.indexOf("boolean");
 
-   if (intIdx > -1) {
-      if (doubleIdx > -1 && expectedTypes.length > 2) {
-         throw new Error("Can't do a binary operation on types: " + expectedTypes.join(", "));
-      } else if (expectedTypes.length > 1) {
-         throw new Error("Can't do a binary operation on types: " + expectedTypes.join(", "));
+   if (stringIdx > -1 || charIdx > -1) {
+      if (expr.op !== BinaryOp.ADD && expr.op !== BinaryOp.LOGIC_EQUAL && expr.op !==
+          BinaryOp.LOGIC_NOT_EQUAL) {
+         throw new Error("Can only check for equality or concatenate strings and characters");
       }
    }
 
-   if (doubleIdx > -1) {
-      if (intIdx > -1 && expectedTypes.length > 2) {
-         throw new Error("Can't do a binary operation on types: " + expectedTypes.join(", "));
-      } else if (expectedTypes.length > 1) {
-         throw new Error("Can't do a binary operation on types: " + expectedTypes.join(", "));
-      }
-   }
-
-   if (charIdx > -1) {
-      if (stringIdx > -1 && expectedTypes.length > 2) {
-         throw new Error("Can't do a binary operation on types: " + expectedTypes.join(", "));
-      } else if (expectedTypes.length > 1) {
-         throw new Error("Can't do a binary operation on types: " + expectedTypes.join(", "));
-      }
-   }
-
-   if (stringIdx > -1) {
-      if (charIdx > -1 && expectedTypes.length > 2) {
-         throw new Error("Can't do a binary operation on types: " + expectedTypes.join(", "));
-      } else if (expectedTypes.length > 1) {
-         throw new Error("Can't do a binary operation on types: " + expectedTypes.join(", "));
+   if (booleanIdx > -1) {
+      switch (expr.op) {
+         case BinaryOp.ADD:
+         case BinaryOp.SUBTRACT:
+         case BinaryOp.MULTIPLY:
+         case BinaryOp.DIVIDE:
+            throw new Error("Can't this operation in a conditional epxression.");
       }
    }
 
@@ -389,24 +386,58 @@ function walkMemberAccess(
    expectedTypes: string[],
    expr: MemberAccess,
 ) {
-   let exprType = "unknown";
-   if (isCall(expr.expression)) {
-      exprType = data.functions[expr.expression.name].returnType;
-   } else if (isIdentifier(expr.expression)) {
-      exprType = data.stack.find(
-         it => it.name === (expr.expression as Identifier).identifier)!!.type;
-   } else {
-      throw new Error("Unknown expression typ!");
+   const type = calculateMemberAccessReturnType(data, expr);
+   if (isNil(type) || !expectedTypes.includes(type)) {
+      throwTypeError(expectedTypes, "unknown");
    }
-   const structFields = data.structs[exprType];
-   const structField = structFields.find(
-      it => it.name === expr.member);
+}
 
-   if (structField === undefined) {
-      throw new Error(`Member ${ expr.member } not found on type: ${ exprType }`);
-   }
-   if (!expectedTypes.includes(structField.type)) {
-      throwTypeError(expectedTypes, structField.type);
+function calculateMemberAccessReturnType(
+   data: TypeCheckData,
+   expr: MemberAccess,
+): string | undefined {
+   /**
+    * Do the latest check on struct type and member
+    */
+   const realAccess = (
+      type: string,
+      member: string,
+   ) => {
+      const realStruct: FieldNameTypePair[] = data.structs[type];
+      if (isNil(realStruct)) {
+         throwTypeError(["anything"], "unknown");
+      } else {
+         const realField = realStruct.find(
+            it => it.name === member);
+         if (isNil(realField)) {
+            throwTypeError(["anything"], "unknown");
+         } else {
+            return realField.type;
+         }
+      }
+   };
+
+   if (isIdentifier(expr.expression)) {
+      let identifierName = expr.expression.identifier;
+      let variableInfo = data.stack.find(
+         it => it.name === identifierName);
+
+      if (isNil(variableInfo)) {
+         throwTypeError(["anything"], "unknown");
+      } else {
+         return realAccess(variableInfo.type, expr.member);
+      }
+   } else if (isCall(expr.expression)) {
+      return realAccess(data.functions[expr.expression.name].returnType, expr.member);
+
+   } else if (isMemberAccess(expr.expression)) {
+      const intermediateName = calculateMemberAccessReturnType(data, expr.expression);
+
+      if (isNil(intermediateName)) {
+         throwTypeError(["anything"], "unknown");
+      } else {
+         return realAccess(intermediateName, expr.member);
+      }
    }
 }
 

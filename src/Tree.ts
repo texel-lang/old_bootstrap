@@ -107,7 +107,7 @@ export interface Expression {
 }
 
 export interface Assignment extends Expression {
-   name: string;
+   name: MemberAccess | Identifier;
    expression: Expression;
 }
 
@@ -160,7 +160,7 @@ export function isCall(obj: any): obj is Call {
 }
 
 export interface MemberAccess extends Expression {
-   expression: Expression,
+   expression: Identifier | MemberAccess | Call,
    member: string;
 }
 

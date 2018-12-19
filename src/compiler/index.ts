@@ -12,10 +12,10 @@ export function compile(file: TexelFile): string {
    collectStructNames(data, file);
    collectFunctionNames(data, file);
    checkNamesAndScopes(data, file);
-   checkTypes(data, file);
+   const types = checkTypes(data, file);
 
    // consoleObject(data);
-   return buildEcmaScript(data, file);
+   return buildEcmaScript(data, types, file);
 }
 
 function collectStructNames(

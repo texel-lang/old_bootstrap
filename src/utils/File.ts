@@ -1,4 +1,4 @@
-import { accessSync, readFileSync } from "fs";
+import { accessSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 
 const fileExists = (fileName: string) => {
    try {
@@ -15,4 +15,13 @@ export const readFile = (fileName: string) => {
    } else {
       return "";
    }
+};
+
+export const printFile = (
+   dirName: string,
+   fileName: string,
+   sourceCode: string,
+) => {
+   mkdirSync(dirName, { recursive: true });
+   writeFileSync(dirName + fileName, sourceCode, { flag: "w+" });
 };

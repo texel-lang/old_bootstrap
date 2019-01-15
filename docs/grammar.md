@@ -1,167 +1,212 @@
-## Grammer
+## Grammar
 
-This doc only shows supported grammar
+TODO:
+```
+- Generic default values i.e. < E : Error = Error>
+```
+
+GrammarSyntax:
+```
+[name] ::   -> a new rule with name
+a | b       -> a 'or' b
+a*          -> zero or more of a
+a+          -> oner or more of a
+a?          -> zero or one of a
+(a)         -> grouping of a
+(a)[b]      -> List of a divided by b, supports trailing b
+(a)![b]     -> List of a divided by b, does not support trailing b 
+```
 
 ```
-texelFile
-    :: topLevelDeclaration*
+texelFile ::
+    importDeclaration*
+    topLevelDeclaration*
+    exportDeclaration?
     
-topLevelDeclaration
-    :: structDeclaration
-     | functionDeclaration
+importDeclaration ::
+    "import" ( SimpleName )!["."] ";"
+    
+exportDeclaration ::
+    "export" "{" ( ( SimpleName )!["."] )[","] "}" ";"
+    
+genericDeclaration ::
+    "<" (SimpleName (":" genericName)? )[","] ">"
+
+genericName ::
+    ( SimpleName ("<" ( genericName )![","] ">" )? )!["."]
+    
+ArraySpecifier ::
+    "[]"
+    
+topLevelDeclaration ::
+    structDeclaration |
+    functionDeclaration |
+    interfaceDeclaration |
+    aliasDeclaration |
+    enumDeclaration |
      
-structDeclaration
-    :: "struct" SimpleName structBody
+structDeclaration ::
+    "closed"? "struct" SimpleName genericDeclaration? extendDeclaration? structBody
 
-structBody
-    :: "{" structFieldDeclaration* "}"
+extendDeclaration ::
+    ":" (genericName)![","]
+
+structBody ::
+    "{" structFieldDeclaration* structDeclaration* "}"
     
-structFieldDeclaration
-    :: typeSpecifier SimpleName ( "=" expression)? ";"
-
-typeSpecifier
-    :: SimpleName
+structFieldDeclaration ::
+    "mut"? genericName ArraySpecifier? SimpleName ( "=" expression)? ";"
     
-functionDeclaration
-    :: "fn" (typeUsage ".")? SimpleName functionParameters functionReturnType functionBody
+functionDeclaration ::
+    "mut"? "fn" genericDeclaration? genericName functionParameters functionReturnType functionBody
     
-functionParameters
-    :: "(" (typeUsage SimpleName)[","] ")"
+functionParameters ::
+    "(" (genericName ArraySpecifier? SimpleName)[","] ")"
     
-functionReturnType
-    :: ":" typeUsage
+functionReturnType ::
+    ":" genericName ArraySpecifier?
     
-functionBody
-    :: block
+functionBody ::
+    block
     
-block
-    :: "{" statement* "}"
+interfaceDeclaration ::
+    "interface" SimpleName genericDeclaration? interfaceBody
+
+interfaceBody ::
+    "{" ( "mut"? "fn" SimpleName "." SimpleName functionParameters functionReturnType ";" )* "}"
     
-statement
-    :: variableDeclaration
-    |  expressionStatement
-    |  loopStatement
-    |  ifElseStatement
-    |  returnStatement
-
-
-variableDeclaration
-    :: typeSpecifier SimpleName "=" expression ";"
-
-expressionStatement
-    :: expression ";"
-
-loopStatement
-    :: "loop" "(" expression ")" loopBlock
+aliasDeclaration ::
+    "alias" SimpleName "=" genericName ";"
     
-loopBlock
-    :: "{" (statement | continueStatement | breakStatement)* "}"
+enumDeclaration ::
+    "enum" SimpleName "{" ( SimpleName )[","] "}"
     
-continueStatement
-    :: "continue" ";"
+block ::
+    "{" statement* "}"
+    
+statement ::
+    variableDeclaration |
+    expressionOrAssignmentStatement |
+    assignmentStatement |
+    loopStatement |
+    ifElseStatement |
+    returnStatement |
+    whenStatement |
 
-breakStatement
-    :: "break" ";"
+variableDeclaration ::
+    "mut"? genericName ArraySpecifier? SimpleName "=" expression ";"
 
-ifElseStatement
-    :: "if" "(" expression ")" block ( "else if" "(" expression ")" block )* ( "else" block )?
+expressionOrAssignmentStatement ::
+    expression ( ("=" | "+=" | "-=" | "*=" | "/=" ) expression)? ";"
 
-returnStatement
-    :: "return" expression? ";"
+loopStatement ::
+    "loop" "(" expression ")" loopBlock
+    
+loopBlock ::
+    "{" (statement | ( ( "continue" | "break" ) ";" )* "}"
 
+ifElseStatement ::
+    "if" "(" expression ")" block ( "else if" "(" expression ")" block )* ( "else" block )?
 
-expression
-    :: assignment
+returnStatement ::
+    "return" expression? ";"
+    
+whenStatement ::
+    "when" "(" expression ")" "{"
+    ( expression "::" ( block | expression ))[", "]
+    ( else "::" ( block | expression ) )? "}"
 
-assignment
-    :: logic_or ( ("=" | "+=" | "-=" | "*=" | "/=" ) logic_or)?
+expression ::
+    structLiteral |
+    arrayLiteral |
+    logic_or |
+    
+structLiteral ::
+    "mut"? "{" ( "." SimpleName ( "=" expression )? )[","] "}"
 
-logic_or
-    :: logic_and ("||" logic_and)?
+arrayLiteral ::
+    "[" ( expression )[","] "]"
 
-logic_and
-    :: equality ("&&" equality)?
+logic_or ::
+    logic_and ("||" logic_and)*
 
-equality
-    :: comparison ( ("==" | "!=" ) comparison)?
+logic_and ::
+    equality ("&&" equality)*
 
-comparison
-    :: addition ( (">" | ">=" | "<" | "<=" ) addition)?
+equality ::
+    comparison ( ("==" | "!=" ) comparison)*
 
-addition
-    :: multiplication ( ("+" | "-" multiplication)?
+comparison ::
+    addition ( (">" | ">=" | "<" | "<=" ) addition)*
 
-multiplication
-    :: prefix ( ("*" | "/" prefix)?
+addition ::
+    multiplication ( ("+" | "-" multiplication)*
 
-prefix
-    :: ("--" | "-" | "++" | "!" )* postfix
+multiplication ::
+    prefix ( ("*" | "/" prefix)*
 
-postfix
-    :: primary postfixOperation*
+prefix ::
+    ("--" | "-" | "++" | "!" )? postfix
 
-postfixOperation
-    :: (call | member | index)?
+postfix ::
+    primary (call | index)*
 
-call
-    :: "(" expression[","] ")"
+call ::
+    "(" expression[","] ")"
 
-member
-    :: "." SimpleName
+index ::
+    "[" expression "]"
 
-index
-    :: "[" expression "]"
+primary ::
+    "(" expression ") |
+    BoolLiteral |
+    StringLiteral |
+    CharLiteral |
+    IntLiteral |
+    DoubleLiteral |
+    SimpleName |
 
-primary
-    :: "(" expression ")
-    |  BoolLiteral
-    |  StringLiteral
-    |  CharLiteral
-    |  IntLiteral
-    |  DoubleLiteral
-    |  structLiteral
-    |  "this"
-    |  SimpleName
+BoolLiteral ::
+    "true" | "false"
 
-objectLiteral
-    :: "{" ("." SimpleName "=" expression)[","] "}"
+StringLiteral ::
+    "\"" (<anything>) "\""
 
-BoolLiteral
-    :: "true" | "false"
+CharLiteral ::
+    "'" "\"? <any char> "'"
 
-StringLiteral
-    :: "\"" (<anything>) "\""
+IntLiteral ::
+    (0-9)*
 
-CharLiteral
-    ::  "'" "\"? <any char> "'"
+DoubleLiteral ::
+    (0-9)+ "." (0-9)+
 
-IntLiteral
-    :: (0-9)*
-
-DoubleLiteral
-    :: (0-9)+ "." (0-9)+
-
-SimpleName
-    :: (a-z | A-Z | _)+
-     
-
+SimpleName ::
+    (a-z | A-Z | _)+
 ```
 
 
 Keywords:
 
 ```
+alias
 break
+closed
 continue
 else
+enum
+export
 false
 fn
 if
+import
+interface
 loop
+mut
 return
 struct
-this
 true
+when
 ```
 
 Tokens:
@@ -174,9 +219,11 @@ Tokens:
 )
 
 ;
-:
 .
 ,
+
+:
+::
 
 "
 '

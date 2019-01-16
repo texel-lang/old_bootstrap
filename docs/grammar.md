@@ -73,7 +73,7 @@ interfaceDeclaration ::
     "interface" SimpleName genericDeclaration? interfaceBody
 
 interfaceBody ::
-    "{" ( "mut"? "fn" SimpleName "." SimpleName functionParameters functionReturnType ";" )* "}"
+    "{" ( "mut"? "fn" SimpleName functionParameters functionReturnType ";" )* "}"
     
 aliasDeclaration ::
     "alias" SimpleName "=" genericName ";"

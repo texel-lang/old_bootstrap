@@ -2,17 +2,24 @@
 export const enum TokenType {
    // KEYWORDS
 
+   ALIAS = "ALIAS",
    BREAK = "BREAK",
+   CLOSED = "CLOSED",
    CONTINUE = "CONTINUE",
    ELSE = "ELSE",
+   ENUM = "ENUM",
+   EXPORT = "EXPORT",
    FALSE = "FALSE",
    FN = "FN",
    IF = "IF",
+   IMPORT = "IMPORT",
+   INTERFACE = "INTERFACE",
    LOOP = "LOOP",
+   MUT = "MUT",
    RETURN = "RETURN",
    STRUCT = "STRUCT",
-   THIS = "THIS",
    TRUE = "TRUE",
+   WHEN = "WHEN",
 
    // Single symbols
 
@@ -23,11 +30,14 @@ export const enum TokenType {
    LEFT_PARENTHESIS = "LEFT_PARENTHESIS",
    RIGHT_PARENTHESIS = "RIGHT_PARENTHESIS",
    SEMICOLON = "SEMICOLON",
-   COLON = "COLON",
    DOT = "DOT",
    COMMA = "COMMA",
 
    // Double symbols
+
+   COLON = "COLON",
+   COLON_COLON = "COLON",
+
 
    PIPE_PIPE = "PIPE_PIPE",
    AND_AND = "AND_AND",
@@ -159,9 +169,6 @@ export function getTokens(
          case ";":
             result.push(buildToken(tokenizer, TokenType.SEMICOLON));
             break;
-         case ":":
-            result.push(buildToken(tokenizer, TokenType.COLON));
-            break;
          case ".":
             result.push(buildToken(tokenizer, TokenType.DOT));
             break;
@@ -179,6 +186,13 @@ export function getTokens(
             break;
          case "&":
             result.push(consumeAndBuildToken(tokenizer, "&", TokenType.AND_AND));
+            break;
+         case ":":
+            if (peek(tokenizer) === ":") {
+               result.push(consumeAndBuildToken(tokenizer, ":", TokenType.COLON_COLON));
+            } else {
+               result.push(buildToken(tokenizer, TokenType.COLON));
+            }
             break;
          case "=":
             if (peek(tokenizer) === "=") {
@@ -441,14 +455,26 @@ function buildNumberToken(tokenizer: Tokenizer): Token {
 
 function buildKeywordTokenOrDefault(defaultToken: Token): Token {
    switch (defaultToken.value) {
+      case "alias":
+         defaultToken.type = TokenType.ALIAS;
+         break;
       case "break":
          defaultToken.type = TokenType.BREAK;
+         break;
+      case "closed":
+         defaultToken.type = TokenType.CLOSED;
          break;
       case "continue":
          defaultToken.type = TokenType.CONTINUE;
          break;
       case "else":
          defaultToken.type = TokenType.ELSE;
+         break;
+      case "enum":
+         defaultToken.type = TokenType.ENUM;
+         break;
+      case "export":
+         defaultToken.type = TokenType.EXPORT;
          break;
       case "false":
          defaultToken.type = TokenType.FALSE;
@@ -459,8 +485,17 @@ function buildKeywordTokenOrDefault(defaultToken: Token): Token {
       case "if":
          defaultToken.type = TokenType.IF;
          break;
+      case "import":
+         defaultToken.type = TokenType.IMPORT;
+         break;
+      case "interface":
+         defaultToken.type = TokenType.INTERFACE;
+         break;
       case "loop":
          defaultToken.type = TokenType.LOOP;
+         break;
+      case "mut":
+         defaultToken.type = TokenType.MUT;
          break;
       case "return":
          defaultToken.type = TokenType.RETURN;
@@ -468,11 +503,11 @@ function buildKeywordTokenOrDefault(defaultToken: Token): Token {
       case "struct":
          defaultToken.type = TokenType.STRUCT;
          break;
-      case "this":
-         defaultToken.type = TokenType.THIS;
-         break;
       case "true":
          defaultToken.type = TokenType.TRUE;
+         break;
+      case "when":
+         defaultToken.type = TokenType.WHEN;
          break;
    }
    return defaultToken;

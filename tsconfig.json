@@ -11,5 +11,9 @@
     "strict": true,
     "target": "es2018",
     "moduleResolution": "node"
-  }
+  },
+  "exclude": [
+    "build/",
+    "dist/"
+  ]
 }

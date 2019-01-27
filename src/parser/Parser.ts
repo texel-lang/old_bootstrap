@@ -28,7 +28,7 @@ import {
    Interface,
    InterfaceFunction,
    IntLiteral,
-   Loop,
+   Loop, Member,
    Postfix,
    Return,
    SimpleName,
@@ -43,7 +43,6 @@ import {
    When,
    WhenArm,
 } from "../tree";
-import { readFile } from "../utils";
 import { getTokens, Token, TokenType } from "./Token";
 
 export interface Parser {
@@ -52,8 +51,11 @@ export interface Parser {
    currentIdx: number;
 }
 
-export function parseFile(fileName: string): TexelFile {
-   let tokens = getTokens(fileName, readFile(fileName));
+export function parseFile(
+   fileName: string,
+   contents: string,
+): TexelFile {
+   let tokens = getTokens(fileName, contents);
 
    // Filter out comments for now.
    tokens = tokens.filter(
@@ -1005,16 +1007,7 @@ function parsePostfix(parser: Parser): Expression {
             case TokenType.DOT:
                consumeOrThrow(parser, TokenType.DOT);
                const part = finishParseMember(parser);
-               if (primary instanceof GenericName) {
-                  primary.parts.push(part);
-               } else {
-                  primary = new GenericName([
-                     {
-                        name: primary,
-                        generics: [],
-                     }, part,
-                  ]);
-               }
+               primary = new Postfix(primary, new Member(part));
                return false;
             default:
                return true;
@@ -1044,17 +1037,8 @@ function finishParseCall(parser: Parser): Call {
    return new Call(values);
 }
 
-function finishParseMember(parser: Parser): GenericNamePart {
-   const value = parseIdentifier(parser);
-
-   if (value instanceof SimpleName) {
-      return {
-         name: value,
-         generics: [],
-      };
-   }
-
-   return value;
+function finishParseMember(parser: Parser): SimpleName | GenericNamePart {
+   return parseIdentifier(parser);
 }
 
 function finishParseIndex(parser: Parser): Index {

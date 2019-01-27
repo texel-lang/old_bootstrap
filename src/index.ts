@@ -1,13 +1,11 @@
-import { compile }   from "./compiler";
 import { parseFile } from "./parser";
-import { printFile } from "./utils";
 
 function getArgs() {
    return [...process.argv].slice(2);
 }
 
 function main() {
-   const args = getArgs();
+   const args = /*getArgs()*/ ["./test/parser.txl"];
    if (args.length === 0) {
       console.log("Texel Compiler -- Version 0.0.1");
       console.log("REPL is not supported yet.");
@@ -20,9 +18,11 @@ function compileFile(fileName: string) {
    try {
       console.time("compile");
       const tree = parseFile(fileName);
-      const output = compile(tree);
+      console.dir(tree, {
+         colors: true,
+         depth: 18,
+      });
       console.timeEnd("compile");
-      printFile("./build", "/index.js", output);
    } catch (e) {
       // FIXME: Need to exit gracefully for nodemon...
       console.error(e);

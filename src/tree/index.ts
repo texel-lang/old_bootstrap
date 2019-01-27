@@ -1,4 +1,4 @@
-class TexelFile {
+export class TexelFile {
    imports: ImportDeclaration[];
    declarations: Declaration[];
    exports: ExportDeclaration[];
@@ -14,7 +14,7 @@ class TexelFile {
    }
 }
 
-class ImportDeclaration {
+export class ImportDeclaration {
    public name: SimpleName[];
 
    constructor(name: SimpleName[]) {
@@ -22,7 +22,7 @@ class ImportDeclaration {
    }
 }
 
-class ExportDeclaration {
+export class ExportDeclaration {
    public name: SimpleName[];
 
    constructor(name: SimpleName[]) {
@@ -30,26 +30,26 @@ class ExportDeclaration {
    }
 }
 
-interface Declaration {
+export interface Declaration {
 }
 
-interface GenericDeclaration {
+export interface GenericDeclaration {
    name: SimpleName;
-   extends: GenericName;
+   extending: GenericName | undefined;
 }
 
-interface FunctionParameter {
+export interface FunctionParameter {
    type: GenericName;
    isArray: boolean;
    name: SimpleName;
 }
 
-interface FunctionReturnType {
+export interface FunctionReturnType {
    name: GenericName;
    isArray: boolean;
 }
 
-interface StructField {
+export interface StructField {
    isMutable: boolean;
    type: GenericName;
    isArray: boolean;
@@ -57,7 +57,7 @@ interface StructField {
    initializer: Expression | undefined;
 }
 
-class Struct implements Declaration {
+export class Struct implements Declaration {
    public isClosed: boolean;
    public name: SimpleName;
    public generics: GenericDeclaration[];
@@ -80,14 +80,15 @@ class Struct implements Declaration {
       this.fields = fields;
       this.innerStructs = innerStructs;
    }
+
 }
 
-class FunctionDecl implements Declaration {
+export class FunctionDecl implements Declaration {
    public isMutable: boolean;
    public generics: GenericDeclaration[];
    public name: GenericName;
    public parameters: FunctionParameter[];
-   public returnType: FunctionReturnType[];
+   public returnType: FunctionReturnType;
    public body: Statement[];
 
    constructor(
@@ -95,7 +96,7 @@ class FunctionDecl implements Declaration {
       generics: GenericDeclaration[],
       name: GenericName,
       parameters: FunctionParameter[],
-      returnType: FunctionReturnType[],
+      returnType: FunctionReturnType,
       body: Statement[],
    ) {
       this.isMutable = isMutable;
@@ -107,14 +108,14 @@ class FunctionDecl implements Declaration {
    }
 }
 
-interface InterfaceFunction {
+export interface InterfaceFunction {
    isMutable: boolean;
    name: SimpleName;
    parameters: FunctionParameter[];
    returnType: FunctionReturnType;
 }
 
-class Interface implements Declaration {
+export class Interface implements Declaration {
    public name: SimpleName;
    public generics: GenericDeclaration[];
    public functionDeclarations: InterfaceFunction[];
@@ -130,7 +131,7 @@ class Interface implements Declaration {
    }
 }
 
-class Alias implements Declaration {
+export class Alias implements Declaration {
    public name: SimpleName;
    public aliased: GenericName;
 
@@ -143,7 +144,7 @@ class Alias implements Declaration {
    }
 }
 
-class Enum implements Declaration {
+export class Enum implements Declaration {
    public name: SimpleName;
    public values: SimpleName[];
 
@@ -156,10 +157,10 @@ class Enum implements Declaration {
    }
 }
 
-interface Statement {
+export interface Statement {
 }
 
-class Variable implements Statement {
+export class Variable implements Statement {
    public isMutable: boolean;
    public type: GenericName;
    public isArray: boolean;
@@ -181,12 +182,12 @@ class Variable implements Statement {
    }
 }
 
-class Assignment implements Statement {
-   public name: SimpleName;
+export class Assignment implements Statement {
+   public name: SimpleName | Index;
    public value: Expression;
 
    constructor(
-      name: SimpleName,
+      name: SimpleName | Index,
       value: Expression,
    ) {
       this.name = name;
@@ -194,7 +195,7 @@ class Assignment implements Statement {
    }
 }
 
-class ExpressionStmt implements Statement {
+export class ExpressionStmt implements Statement {
    public expression: Expression;
 
    constructor(expression: Expression) {
@@ -202,28 +203,32 @@ class ExpressionStmt implements Statement {
    }
 }
 
-type Break = {};
-type Continue = {};
+export class Break implements Statement {
 
-class Loop implements Statement {
+}
+
+export class Continue implements Statement {
+}
+
+export class Loop implements Statement {
    public condition: Expression;
-   public block: (Statement | Break | Continue)[];
+   public block: Statement[];
 
    constructor(
       condition: Expression,
-      block: (Statement | Break | Continue)[],
+      block: Statement[],
    ) {
       this.condition = condition;
       this.block = block;
    }
 }
 
-interface IfElseArm {
+export interface IfElseArm {
    condition: Expression;
    block: Statement[];
 }
 
-class IfElse implements Statement {
+export class IfElse implements Statement {
    public ifArm: IfElseArm;
    public elseIfs: IfElseArm[];
    public elseArm: Statement[];
@@ -239,7 +244,7 @@ class IfElse implements Statement {
    }
 }
 
-class Return implements Statement {
+export class Return implements Statement {
    public value: Expression | undefined;
 
    constructor(value: Expression | undefined) {
@@ -247,20 +252,20 @@ class Return implements Statement {
    }
 }
 
-interface WhenArm {
+export interface WhenArm {
    condition: Expression;
    block: Statement[] | Expression;
 }
 
-class When implements Statement {
+export class When implements Statement {
    public condition: Expression;
    public arms: WhenArm[];
-   public elseArm: Statement[] | Expression;
+   public elseArm: Statement[] | Expression | undefined;
 
    constructor(
       condition: Expression,
       arms: WhenArm[],
-      elseArm: Statement[] | Expression,
+      elseArm: Statement[] | Expression | undefined,
    ) {
       this.condition = condition;
       this.arms = arms;
@@ -268,15 +273,16 @@ class When implements Statement {
    }
 }
 
-interface Expression {
+export interface Expression {
 }
 
-interface StructLiteralField {
+export interface StructLiteralField {
    name: SimpleName;
-   value: Expression | undefined;
+   // Shorthand fields are automatically expanded with value = name
+   value: Expression;
 }
 
-class StructLiteral implements Expression {
+export class StructLiteral implements Expression {
    public isMutable: boolean;
    public fields: StructLiteralField[];
 
@@ -289,7 +295,7 @@ class StructLiteral implements Expression {
    }
 }
 
-class ArrayLiteral implements Expression {
+export class ArrayLiteral implements Expression {
    public values: Expression[];
 
    constructor(values: Expression[]) {
@@ -297,15 +303,16 @@ class ArrayLiteral implements Expression {
    }
 }
 
-enum ArithmeticOp {
+export enum ArithmeticOp {
    MULTIPLY, DIVIDE, ADD, SUBTRACT,
 }
 
-enum BooleanOp {
-   GREATER, GREATER_EQUAL, SMALLER, SMALLER_EQUAL, EQUAL, NOT_EQUAL, AND, OR,
+export enum BooleanOp {
+   GREATER = ArithmeticOp.SUBTRACT +
+             1, GREATER_EQUAL, SMALLER, SMALLER_EQUAL, EQUAL, NOT_EQUAL, AND, OR,
 }
 
-class Binary implements Expression {
+export class Binary implements Expression {
    public left: Expression;
    public right: Expression;
    public operator: ArithmeticOp | BooleanOp;
@@ -321,7 +328,7 @@ class Binary implements Expression {
    }
 }
 
-class BooleanNegate implements Expression {
+export class BooleanNegate implements Expression {
    public value: Expression;
 
    constructor(value: Expression) {
@@ -329,7 +336,7 @@ class BooleanNegate implements Expression {
    }
 }
 
-class Postfix implements Expression {
+export class Postfix implements Expression {
    public left: Expression;
    public operation: Call | Index;
 
@@ -342,7 +349,7 @@ class Postfix implements Expression {
    }
 }
 
-class Call implements Expression {
+export class Call implements Expression {
    public values: Expression[];
 
    constructor(values: Expression[]) {
@@ -350,7 +357,7 @@ class Call implements Expression {
    }
 }
 
-class Index implements Expression {
+export class Index implements Expression {
    public value: Expression;
 
    constructor(value: Expression) {
@@ -358,15 +365,15 @@ class Index implements Expression {
    }
 }
 
-class Literal<T> implements Expression {
-   public value: T;
+export class BoolLiteral implements Expression {
+   public value: boolean;
 
-   constructor(value: T) {
+   constructor(value: boolean) {
       this.value = value;
    }
 }
 
-class SimpleName implements Expression {
+export class StringLiteral implements Expression {
    public value: string;
 
    constructor(value: string) {
@@ -374,12 +381,44 @@ class SimpleName implements Expression {
    }
 }
 
-interface GenericNamePart {
-   name: SimpleName;
+export class CharLiteral implements Expression {
+   public value: string;
+
+   constructor(value: string) {
+      this.value = value;
+   }
+}
+
+export class IntLiteral implements Expression {
+   public value: number;
+
+   constructor(value: number) {
+      this.value = value;
+   }
+}
+
+export class DoubleLiteral implements Expression {
+   public value: number;
+
+   constructor(value: number) {
+      this.value = value;
+   }
+}
+
+export class SimpleName implements Expression {
+   public value: string;
+
+   constructor(value: string) {
+      this.value = value;
+   }
+}
+
+export interface GenericNamePart {
+   name: SimpleName | Expression;
    generics: GenericName[];
 }
 
-class GenericName {
+export class GenericName implements Expression {
    public parts: GenericNamePart[];
 
    constructor(parts: GenericNamePart[]) {

@@ -1,37 +1,49 @@
 import {
+   Alias,
+   ArithmeticOp,
+   ArrayLiteral,
    Assignment,
-   BinaryExpression,
-   BinaryNegate,
-   BinaryOp,
-   BooleanLiteral,
+   Binary,
+   BooleanNegate,
+   BooleanOp,
+   BoolLiteral,
    Call,
    CharLiteral,
+   Declaration,
    DoubleLiteral,
+   Enum,
+   ExportDeclaration,
    Expression,
-   ExpressionStatement,
-   ExpressionType,
-   FunctionDeclaration,
+   ExpressionStmt,
+   FunctionDecl,
    FunctionParameter,
-   Identifier,
-   IfElseStatement,
-   IntLiteral, isCall,
-   isIdentifier,
-   isMemberAccess,
-   LoopControlStatement,
-   LoopStatement,
-   MemberAccess,
-   ReturnStatement,
+   FunctionReturnType,
+   GenericDeclaration,
+   GenericName,
+   GenericNamePart,
+   IfElse,
+   IfElseArm,
+   ImportDeclaration,
+   Index,
+   Interface,
+   InterfaceFunction,
+   IntLiteral,
+   Loop,
+   Postfix,
+   Return,
+   SimpleName,
    Statement,
-   StatementType,
    StringLiteral,
-   StructDeclaration,
+   Struct,
    StructField,
    StructLiteral,
-   StructLiteralAssignment,
+   StructLiteralField,
    TexelFile,
-   VariableDeclaration,
-}                                      from "../Tree";
-import { readFile }                    from "../utils";
+   Variable,
+   When,
+   WhenArm,
+} from "../tree";
+import { readFile } from "../utils";
 import { getTokens, Token, TokenType } from "./Token";
 
 export interface Parser {
@@ -49,6 +61,7 @@ export function parseFile(fileName: string): TexelFile {
          return it.type !== TokenType.COMMENT;
       });
 
+
    const info: Parser = {
       tokens,
       tokenLength: tokens.length,
@@ -63,7 +76,8 @@ function isAtEnd(parser: Parser): boolean {
 }
 
 function peek(parser: Parser): Token {
-   return parser.tokens[parser.currentIdx];
+   return isAtEnd(parser) ? { type: TokenType.EOF } as Token
+                          : parser.tokens[parser.currentIdx];
 }
 
 function peekType(parser: Parser): TokenType {
@@ -81,6 +95,23 @@ function getNext(parser: Parser): Token | undefined {
    }
 }
 
+function throwError(
+   parser: Parser,
+   expectedType: TokenType,
+): never {
+   const peeked = peek(parser);
+
+   let next = "";
+
+   let idx = 0;
+   while (!isAtEnd(parser) && idx !== 5) {
+      next += getNext(parser)!.value;
+      idx += 1;
+   }
+
+   throw new Error(`Expected ${ expectedType } but found ${ next } at ${ peeked.sourcePosition.fileName }::${ peeked.sourcePosition.lineIdx }.`);
+}
+
 function consume(
    parser: Parser,
    type: TokenType,
@@ -93,37 +124,13 @@ function consume(
    }
 }
 
-/**
- * Throws if next token is not of the expected type.
- * Will replace '{0}' in the error message with the expected TokenType.
- * Will replace '{1}' in the error message with the current TokenType.
- * Will replace '{2}' in the error message with source file and line.
- */
 function consumeOrThrow(
    parser: Parser,
-   type: TokenType,
-   errorMessage: string = "Expected TokenType: '{0}'. Found '{1}'. At line: {2}",
+   expectedType: TokenType,
 ) {
-   if (!consume(parser, type)) {
-      const peeked = peek(parser);
-      throw new Error(errorMessage
-      .replace("{0}", type)
-      .replace("{1}", peeked.type)
-      .replace("{2}",
-         `${ peeked.sourcePosition.fileName }::${ peeked.sourcePosition.lineIdx }`,
-      ));
+   if (!consume(parser, expectedType)) {
+      throwError(parser, expectedType);
    }
-}
-
-function throwError(
-   parser: Parser,
-   ...expectedTypes: TokenType[]
-): void {
-   const token = peek(parser);
-   throw new Error(`
-   Unexpected token with type: ${ token.type } and value: ${ token.value }.
-   In file: ${ token.sourcePosition.fileName }:${ token.sourcePosition.lineIdx }.
-   Expected: ${ expectedTypes.join(" | ") }`);
 }
 
 function expectOrThrow(
@@ -135,712 +142,1099 @@ function expectOrThrow(
    }
 }
 
-function parseTexelFile(parser: Parser): TexelFile {
-   const result: TexelFile = {
-      structs: [],
-      functions: [],
-   };
+/**
+ * Check if peek type is in or not in the tokens array.
+ */
+interface LoopSetting {
+   condition: "in" | "not-in";
+   tokens: TokenType[];
+}
 
+/**
+ * Loop till condition is false, or parser#isAtEnd, or workAndDone returns true;
+ */
+function loopTill(
+   parser: Parser,
+   settings: LoopSetting,
+   workAndDone: (type: TokenType) => boolean,
+) {
+   let peekedType = peekType(parser);
    while (!isAtEnd(parser)) {
-      switch (peekType(parser)) {
-         case TokenType.ERROR:
-            throw new Error(getNext(parser)!!.value);
-         case TokenType.EOF:
-            break;
-         case TokenType.STRUCT:
-            consume(parser, TokenType.STRUCT);
-            result.structs.push(parseStructDeclaration(parser));
-            break;
-         case TokenType.FN:
-            consume(parser, TokenType.FN);
-            result.functions.push(parseFunctionDeclaration(parser));
-            break;
-         default:
-            throwError(parser, TokenType.STRUCT);
+      const includes = settings.tokens.includes(peekedType);
+
+      // If peek should be in array but isn't
+      if (settings.condition === "in" && !includes) {
+         break;
       }
+
+      // If peek should not be in array but is
+      if (settings.condition === "not-in" && includes) {
+         break;
+      }
+
+      if (workAndDone(peekedType)) {
+         break;
+      }
+
+      peekedType = peekType(parser);
+   }
+}
+
+function checkComma(
+   parser: Parser,
+   ...tokens: TokenType[]
+): void {
+   if ([TokenType.COMMA, ...tokens].includes(peekType(parser))) {
+      consume(parser, TokenType.COMMA);
+   } else {
+      throwError(parser, TokenType.COMMA);
+   }
+}
+
+function parseTexelFile(parser: Parser): TexelFile {
+   const imports: ImportDeclaration[] = [];
+   const declarations: Declaration[] = [];
+   let exports: ExportDeclaration[] = [];
+
+   loopTill(parser, {
+         condition: "not-in",
+         tokens: [TokenType.EOF],
+      },
+      type => {
+         switch (type) {
+            case TokenType.IMPORT:
+               imports.push(parseImport(parser));
+               break;
+            case TokenType.EXPORT:
+               exports = parseExport(parser);
+               return true;
+            default:
+               declarations.push(parseDeclaration(parser));
+               break;
+         }
+         return false;
+      },
+   );
+
+   return new TexelFile(imports, declarations, exports);
+}
+
+function parseImport(parser: Parser): ImportDeclaration {
+   consumeOrThrow(parser, TokenType.IMPORT);
+
+   const names: SimpleName[] = [];
+
+   loopTill(parser, {
+         condition: "not-in",
+         tokens: [TokenType.SEMICOLON],
+      },
+      type => {
+         if (type === TokenType.IDENTIFIER) {
+            names.push(new SimpleName(getNext(parser)!.value));
+         } else if (type === TokenType.STAR) {
+            names.push(new SimpleName("*"));
+            getNext(parser);
+            return true;
+         } else {
+            expectOrThrow(parser, TokenType.IDENTIFIER);
+         }
+
+         // Return from `loopTill` if we can't get another nested identifier.
+         return !consume(parser, TokenType.DOT);
+      },
+   );
+   consumeOrThrow(parser, TokenType.SEMICOLON);
+
+   return new ImportDeclaration(names);
+}
+
+function parseExport(parser: Parser): ExportDeclaration[] {
+   consumeOrThrow(parser, TokenType.EXPORT);
+   consumeOrThrow(parser, TokenType.LEFT_CURLY_BRACKET);
+
+   const exports: ExportDeclaration[] = [];
+
+   loopTill(parser, {
+      condition: "not-in",
+      tokens: [TokenType.RIGHT_CURLY_BRACKET],
+   }, () => {
+
+      const names: SimpleName[] = [];
+
+      loopTill(parser, {
+            condition: "not-in",
+            tokens: [TokenType.DOT],
+         },
+         type => {
+            if (type === TokenType.IDENTIFIER) {
+               names.push(new SimpleName(getNext(parser)!.value));
+            } else if (type === TokenType.STAR) {
+               names.push(new SimpleName("*"));
+               getNext(parser);
+               return true;
+            } else {
+               expectOrThrow(parser, TokenType.IDENTIFIER);
+            }
+
+            // Return from `loopTill` if we can't get another nested identifier.
+            return !consume(parser, TokenType.DOT);
+         },
+      );
+
+      exports.push(new ExportDeclaration(names));
+
+      checkComma(parser, TokenType.RIGHT_CURLY_BRACKET);
+
+      return false;
+   });
+
+   consumeOrThrow(parser, TokenType.RIGHT_CURLY_BRACKET);
+
+   return exports;
+}
+
+function parseDeclaration(parser: Parser): Declaration {
+   const peekedType = peekType(parser);
+
+   switch (peekedType) {
+      case TokenType.CLOSED:
+      case TokenType.STRUCT:
+         return parseStruct(parser);
+      case TokenType.MUT:
+      case TokenType.FN:
+         return parseFunction(parser);
+      case TokenType.INTERFACE:
+         return parseInterface(parser);
+      case TokenType.ALIAS:
+         return parseAlias(parser);
+      case TokenType.ENUM:
+         return parseEnum(parser);
+      default:
+         return throwError(parser, TokenType.FN);
+   }
+}
+
+function parseGenericDeclaration(parser: Parser): GenericDeclaration[] {
+   const result: GenericDeclaration[] = [];
+
+   if (!consume(parser, TokenType.SMALLER)) {
+      return result;
    }
 
+   loopTill(parser, {
+      condition: "not-in",
+      tokens: [TokenType.GREATER],
+   }, () => {
+      expectOrThrow(parser, TokenType.IDENTIFIER);
+      const name = new SimpleName(getNext(parser)!.value);
+      let extending: GenericName | undefined = undefined;
+
+      if (consume(parser, TokenType.COLON)) {
+         extending = parseFullGenericName(parser);
+      }
+
+      checkComma(parser, TokenType.GREATER);
+
+      result.push({
+         name,
+         extending,
+      });
+
+      return false;
+   });
+
+   consumeOrThrow(parser, TokenType.GREATER);
    return result;
-}
-
-function parseStructDeclaration(parser: Parser): StructDeclaration {
-   if (peekType(parser) !== TokenType.IDENTIFIER) {
-      throw new Error("Expecting struct name.");
-   }
-   const name = getNext(parser)!!.value;
-
-   consumeOrThrow(parser, TokenType.LEFT_CURLY_BRACKET);
-
-   const fields: StructField[] = [];
-   while (!isAtEnd(parser) && peekType(parser) !== TokenType.RIGHT_CURLY_BRACKET) {
-      expectOrThrow(parser, TokenType.IDENTIFIER);
-      const type = getNext(parser)!!.value;
-
-      expectOrThrow(parser, TokenType.IDENTIFIER);
-      const name = getNext(parser)!!.value;
-      if (peekType(parser) === TokenType.EQUAL) {
-         consumeOrThrow(parser, TokenType.EQUAL);
-         const expression = parseExpression(parser);
-         fields.push({
-            type,
-            name,
-            initializer: expression,
-         });
-      } else {
-         fields.push({
-            type,
-            name,
-         });
-      }
-      consumeOrThrow(parser, TokenType.SEMICOLON);
-   }
-   consumeOrThrow(parser, TokenType.RIGHT_CURLY_BRACKET);
-
-   return {
-      name,
-      fields,
-   };
-}
-
-function parseFunctionDeclaration(parser: Parser): FunctionDeclaration {
-   expectOrThrow(parser, TokenType.IDENTIFIER);
-   // TODO: Extension functions maybe in form of member access?
-   const name = getNext(parser)!!.value;
-   const parameters: FunctionParameter[] = parseFunctionParameters(parser);
-
-   consumeOrThrow(parser, TokenType.COLON);
-   expectOrThrow(parser, TokenType.IDENTIFIER);
-   const returnType = getNext(parser)!!.value;
-
-   consumeOrThrow(parser, TokenType.LEFT_CURLY_BRACKET);
-   const statements: Statement[] = parseStatementBlock(parser);
-
-   consumeOrThrow(parser, TokenType.RIGHT_CURLY_BRACKET);
-   return {
-      name,
-      parameters,
-      returnType,
-      statements,
-   };
 }
 
 function parseFunctionParameters(parser: Parser): FunctionParameter[] {
    const result: FunctionParameter[] = [];
 
    consumeOrThrow(parser, TokenType.LEFT_PARENTHESIS);
-   while (!isAtEnd(parser) && peekType(parser) !== TokenType.RIGHT_PARENTHESIS) {
+
+   loopTill(parser, {
+      condition: "not-in",
+      tokens: [TokenType.RIGHT_PARENTHESIS],
+   }, () => {
+      const type = parseFullGenericName(parser);
+      const isArray = consume(parser, TokenType.LEFT_BRACKET);
+      if (isArray) {
+         consumeOrThrow(parser, TokenType.RIGHT_BRACKET);
+      }
+
       expectOrThrow(parser, TokenType.IDENTIFIER);
-      const type = getNext(parser)!!.value;
-      expectOrThrow(parser, TokenType.IDENTIFIER);
-      const name = getNext(parser)!!.value;
+      const name = new SimpleName(getNext(parser)!.value);
+
+      checkComma(parser, TokenType.RIGHT_PARENTHESIS);
+
       result.push({
          type,
          name,
+         isArray,
       });
-      if ((peekType(parser) !== TokenType.COMMA) &&
-          (peekType(parser) !== TokenType.RIGHT_PARENTHESIS)) {
-         throwError(parser, TokenType.COMMA, TokenType.RIGHT_PARENTHESIS);
-      }
-      consume(parser, TokenType.COMMA);
-   }
-   consumeOrThrow(parser, TokenType.RIGHT_PARENTHESIS);
 
+      return false;
+   });
+
+   consumeOrThrow(parser, TokenType.RIGHT_PARENTHESIS);
    return result;
 }
 
-function parseStatementBlock(
-   parser: Parser,
-   supportControlStatements: boolean = false,
-): Statement[] {
-   const result: Statement[] = [];
+function parseFunctionReturnType(parser: Parser): FunctionReturnType {
+   consumeOrThrow(parser, TokenType.COLON);
 
-   while (!isAtEnd(parser) && peekType(parser) !== TokenType.RIGHT_CURLY_BRACKET) {
-      switch (peekType(parser)) {
-         case TokenType.LOOP:
-            result.push(parseLoop(parser));
-            break;
-         case TokenType.IF:
-            result.push(parseIf(parser));
-            break;
-         case TokenType.RETURN:
-            consumeOrThrow(parser, TokenType.RETURN);
-            const expr = parseExpression(parser);
-            consumeOrThrow(parser, TokenType.SEMICOLON);
-            result.push({
-               statementType: StatementType.ReturnStatement,
-               expression: expr,
-            } as ReturnStatement);
-            break;
-         case TokenType.CONTINUE:
-            if (!supportControlStatements) {
-               throwError(parser, TokenType.ERROR);
-            }
-            getNext(parser);
-            consumeOrThrow(parser, TokenType.SEMICOLON);
-            result.push({
-               statementType: StatementType.LoopControlStatement,
-               isBreak: false,
-               isContinue: true,
-            } as LoopControlStatement);
-            break;
-         case TokenType.BREAK:
-            if (!supportControlStatements) {
-               throwError(parser, TokenType.ERROR);
-            }
-            getNext(parser);
-            consumeOrThrow(parser, TokenType.SEMICOLON);
-            result.push({
-               statementType: StatementType.LoopControlStatement,
-               isBreak: true,
-               isContinue: false,
-            } as LoopControlStatement);
-            break;
-         default:
-            const intermediateExpression = parseExpression(parser);
-            if (isIdentifier(intermediateExpression)) {
-               result.push(parseVariableDeclaration(parser,
-                  intermediateExpression.identifier,
-               ));
-            } else {
-               consumeOrThrow(parser, TokenType.SEMICOLON);
-               result.push({
-                  statementType: StatementType.ExpressionStatement,
-                  expression: intermediateExpression,
-               } as ExpressionStatement);
-            }
-      }
-   }
+   const name = parseFullGenericName(parser);
 
-   return result;
-}
-
-function parseLoop(parser: Parser): LoopStatement {
-   consumeOrThrow(parser, TokenType.LOOP);
-   consumeOrThrow(parser, TokenType.LEFT_PARENTHESIS);
-
-   const expression = parseExpression(parser);
-
-   consumeOrThrow(parser, TokenType.RIGHT_PARENTHESIS);
-
-   consumeOrThrow(parser, TokenType.LEFT_CURLY_BRACKET);
-   const statements: Statement[] = parseStatementBlock(parser, true);
-   consumeOrThrow(parser, TokenType.RIGHT_CURLY_BRACKET);
-
-   return {
-      statementType: StatementType.LoopStatement,
-      expression,
-      statements,
-   };
-}
-
-function parseIf(parser: Parser): IfElseStatement {
-   consumeOrThrow(parser, TokenType.IF);
-   consumeOrThrow(parser, TokenType.LEFT_PARENTHESIS);
-   const expression = parseExpression(parser);
-   consumeOrThrow(parser, TokenType.RIGHT_PARENTHESIS);
-
-   consumeOrThrow(parser, TokenType.LEFT_CURLY_BRACKET);
-   const statements: Statement[] = parseStatementBlock(parser);
-   consumeOrThrow(parser, TokenType.RIGHT_CURLY_BRACKET);
-
-   const elseIfs: IfElseStatement[] = [];
-   const elseStatements: Statement[] = [];
-
-   while (!isAtEnd(parser) && peekType(parser) === TokenType.ELSE) {
-      consumeOrThrow(parser, TokenType.ELSE);
-
-      if (peekType(parser) === TokenType.IF) {
-         consumeOrThrow(parser, TokenType.IF);
-
-         consumeOrThrow(parser, TokenType.LEFT_PARENTHESIS);
-         const ifElseExpr = parseExpression(parser);
-         consumeOrThrow(parser, TokenType.RIGHT_PARENTHESIS);
-
-         consumeOrThrow(parser, TokenType.LEFT_CURLY_BRACKET);
-         const ifElseStmts: Statement[] = parseStatementBlock(parser);
-         consumeOrThrow(parser, TokenType.RIGHT_CURLY_BRACKET);
-
-         elseIfs.push({
-            statementType: StatementType.IfElseStatement,
-            expression: ifElseExpr,
-            statements: ifElseStmts,
-            elseIfs: [],
-            elseStatements: [],
-         });
-      } else {
-         consumeOrThrow(parser, TokenType.LEFT_CURLY_BRACKET);
-         elseStatements.push(...parseStatementBlock(parser));
-         consumeOrThrow(parser, TokenType.RIGHT_CURLY_BRACKET);
-         break;
-      }
+   const isArray = consume(parser, TokenType.LEFT_BRACKET);
+   if (isArray) {
+      consumeOrThrow(parser, TokenType.RIGHT_BRACKET);
    }
 
    return {
-      statementType: StatementType.IfElseStatement,
-      expression,
-      statements,
-      elseIfs,
-      elseStatements,
+      name,
+      isArray,
    };
 }
 
-function parseVariableDeclaration(
-   parser: Parser,
-   typeName: string,
-): VariableDeclaration {
+function parseStruct(parser: Parser): Declaration {
+   const isClosed = consume(parser, TokenType.CLOSED);
+   consumeOrThrow(parser, TokenType.STRUCT);
+
    expectOrThrow(parser, TokenType.IDENTIFIER);
-   const name = getNext(parser)!!.value;
+   const name = new SimpleName(getNext(parser)!.value);
 
-   let expression;
-   if (consume(parser, TokenType.EQUAL)) {
-      expression = parseLogicOr(parser);
-   } else {
-      expression = undefined;
+   const genericDeclaration = parseGenericDeclaration(parser);
+
+   const extending: GenericName[] = [];
+
+   if (consume(parser, TokenType.COLON)) {
+      loopTill(parser, {
+         condition: "not-in",
+         tokens: [TokenType.LEFT_CURLY_BRACKET],
+      }, () => {
+
+         extending.push(parseFullGenericName(parser));
+
+         checkComma(parser, TokenType.LEFT_CURLY_BRACKET);
+
+         return false;
+      });
    }
+
+   const fields: StructField[] = [];
+   const innerStructs: Struct[] = [];
+
+   consumeOrThrow(parser, TokenType.LEFT_CURLY_BRACKET);
+
+   loopTill(parser, {
+         condition: "not-in",
+         tokens: [TokenType.RIGHT_CURLY_BRACKET],
+      },
+      type => {
+         if ([TokenType.STRUCT, TokenType.CLOSED].includes(type)) {
+            innerStructs.push(parseStruct(parser) as Struct);
+         } else {
+            const isMutable = consume(parser, TokenType.MUT);
+            const type = parseFullGenericName(parser);
+
+            const isArray = consume(parser, TokenType.LEFT_BRACKET);
+            if (isArray) {
+               consumeOrThrow(parser, TokenType.RIGHT_BRACKET);
+            }
+
+            expectOrThrow(parser, TokenType.IDENTIFIER);
+            const name = new SimpleName(getNext(parser)!.value);
+
+            const expr = consume(parser, TokenType.EQUAL) ? parseExpression(parser)
+                                                          : undefined;
+
+            consumeOrThrow(parser, TokenType.SEMICOLON);
+
+            fields.push({
+               isMutable,
+               type,
+               isArray,
+               name,
+               initializer: expr,
+            });
+         }
+
+         return false;
+      },
+   );
+
+   consumeOrThrow(parser, TokenType.RIGHT_CURLY_BRACKET);
+
+   return new Struct(isClosed, name, genericDeclaration, extending, fields, innerStructs);
+}
+
+function parseFunction(parser: Parser): Declaration {
+   const isMutable = consume(parser, TokenType.MUT);
+   consumeOrThrow(parser, TokenType.FN);
+
+   const genericDeclaration = parseGenericDeclaration(parser);
+
+   const name = parseFullGenericName(parser);
+   const parameters = parseFunctionParameters(parser);
+   const returnType = parseFunctionReturnType(parser);
+
+   return new FunctionDecl(isMutable, genericDeclaration,
+      name, parameters, returnType, parseBlock(parser, false),
+   );
+}
+
+function parseInterface(parser: Parser): Declaration {
+   consumeOrThrow(parser, TokenType.INTERFACE);
+
+   expectOrThrow(parser, TokenType.IDENTIFIER);
+   const name = new SimpleName(getNext(parser)!.value);
+
+   const genericDeclaration = parseGenericDeclaration(parser);
+   const functionDeclarations: InterfaceFunction[] = [];
+
+   consumeOrThrow(parser, TokenType.LEFT_CURLY_BRACKET);
+   loopTill(parser, {
+      condition: "not-in",
+      tokens: [TokenType.RIGHT_CURLY_BRACKET],
+   }, () => {
+      const isMutable = consume(parser, TokenType.MUT);
+      consumeOrThrow(parser, TokenType.FN);
+
+      expectOrThrow(parser, TokenType.IDENTIFIER);
+      const name = new SimpleName(getNext(parser)!.value);
+      const parameters = parseFunctionParameters(parser);
+      const returnType = parseFunctionReturnType(parser);
+
+      consumeOrThrow(parser, TokenType.SEMICOLON);
+
+      functionDeclarations.push({
+         isMutable,
+         name,
+         parameters,
+         returnType,
+      });
+
+      return false;
+   });
+   consumeOrThrow(parser, TokenType.RIGHT_CURLY_BRACKET);
+
+   return new Interface(name, genericDeclaration, functionDeclarations);
+}
+
+function parseAlias(parser: Parser): Declaration {
+   consumeOrThrow(parser, TokenType.ALIAS);
+
+   expectOrThrow(parser, TokenType.IDENTIFIER);
+   const name = new SimpleName(getNext(parser)!.value);
+
+   consumeOrThrow(parser, TokenType.EQUAL);
+   const value = parseFullGenericName(parser);
 
    consumeOrThrow(parser, TokenType.SEMICOLON);
 
-   return {
-      statementType: StatementType.VariableDeclaration,
-      type: typeName,
-      name,
-      expression,
-   };
+   return new Alias(name, value);
+}
+
+function parseEnum(parser: Parser): Declaration {
+   consumeOrThrow(parser, TokenType.ENUM);
+
+   expectOrThrow(parser, TokenType.IDENTIFIER);
+   const name = new SimpleName(getNext(parser)!.value);
+   const values: SimpleName[] = [];
+
+   consumeOrThrow(parser, TokenType.LEFT_CURLY_BRACKET);
+
+   loopTill(parser, {
+         condition: "not-in",
+         tokens: [TokenType.RIGHT_CURLY_BRACKET],
+      },
+      type => {
+         if (type !== TokenType.IDENTIFIER) {
+            throwError(parser, TokenType.IDENTIFIER);
+         }
+
+         values.push(new SimpleName(getNext(parser)!.value));
+
+         checkComma(parser, TokenType.RIGHT_CURLY_BRACKET);
+
+         return false;
+      },
+   );
+
+   consumeOrThrow(parser, TokenType.RIGHT_CURLY_BRACKET);
+
+   return new Enum(name, values);
+}
+
+function parseBlock(
+   parser: Parser,
+   isInLoop: boolean,
+): Statement[] {
+   const result: Statement[] = [];
+
+   consumeOrThrow(parser, TokenType.LEFT_CURLY_BRACKET);
+
+   loopTill(parser, {
+      condition: "not-in",
+      tokens: [TokenType.RIGHT_CURLY_BRACKET],
+   }, () => {
+      result.push(parseStatement(parser, isInLoop));
+
+      return false;
+   });
+
+   consumeOrThrow(parser, TokenType.RIGHT_CURLY_BRACKET);
+
+   return result;
+}
+
+function parseStatement(
+   parser: Parser,
+   isInLoop: boolean,
+): Statement {
+   const peekedType = peekType(parser);
+
+   switch (peekedType) {
+      case TokenType.LOOP: {
+         return parseLoop(parser);
+      }
+      case TokenType.IF: {
+         return parseIfElse(parser, isInLoop);
+      }
+      case TokenType.RETURN: {
+         return parseReturn(parser);
+      }
+      case TokenType.WHEN: {
+         return parseWhen(parser, isInLoop);
+      }
+      case TokenType.MUT:
+         return startParseVariableDeclaration(parser);
+      default:
+         const expr = parseExpression(parser);
+         let idx = parser.currentIdx;
+         const localPeekType = () => (parser.tokens[idx] || { type: TokenType.EOF }).type;
+
+         if (expr instanceof GenericName || expr instanceof SimpleName) {
+            if (localPeekType() === TokenType.LEFT_BRACKET && parser.tokens[idx + 1].type ===
+                TokenType.RIGHT_BRACKET) {
+               const next = (parser.tokens[idx + 2] || { type: TokenType.EOF }).type;
+               if (next === TokenType.IDENTIFIER) {
+                  return finishParseVariableDeclaration(parser, false, expr);
+               } else {
+                  return finishParseExpressionOrAssignment(parser, expr);
+               }
+            } else {
+               if (localPeekType() === TokenType.IDENTIFIER) {
+                  return finishParseVariableDeclaration(parser, false, expr);
+               } else {
+                  return finishParseExpressionOrAssignment(parser, expr);
+               }
+            }
+         } else {
+            return finishParseExpressionOrAssignment(parser, expr);
+         }
+   }
+}
+
+function startParseVariableDeclaration(parser: Parser): Statement {
+   const mutable = consume(parser, TokenType.MUT);
+   const identifier = parseIdentifier(parser);
+
+   return finishParseVariableDeclaration(parser,
+      mutable,
+      identifier instanceof SimpleName ? identifier : new GenericName([identifier]),
+   );
+}
+
+function finishParseVariableDeclaration(
+   parser: Parser,
+   isMutable: boolean,
+   identifier: SimpleName | GenericName,
+): Statement {
+   let isArray = false;
+   if (peekType(parser) === TokenType.LEFT_BRACKET) {
+      consumeOrThrow(parser, TokenType.LEFT_BRACKET);
+      consumeOrThrow(parser, TokenType.RIGHT_BRACKET);
+      isArray = true;
+   }
+
+   const name = parseIdentifier(parser);
+   if (!(name instanceof SimpleName)) {
+      throwError(parser, TokenType.IDENTIFIER);
+   }
+
+   consumeOrThrow(parser, TokenType.EQUAL);
+   const expr = parseExpression(parser);
+
+   consumeOrThrow(parser, TokenType.SEMICOLON);
+
+   return new Variable(isMutable, identifier instanceof SimpleName ? new GenericName([
+      {
+         name: identifier,
+         generics: [],
+      },
+   ]) : identifier, isArray, name as SimpleName, expr);
+}
+
+function finishParseExpressionOrAssignment(
+   parser: Parser,
+   leftHandExpr: Expression,
+): Statement {
+   if (leftHandExpr instanceof SimpleName || leftHandExpr instanceof Index) {
+
+      if (consume(parser, TokenType.EQUAL)) {
+         const expr = parseExpression(parser);
+         consumeOrThrow(parser, TokenType.SEMICOLON);
+         return new Assignment(leftHandExpr, expr);
+
+      } else if (consume(parser, TokenType.PLUS_EQUAL)) {
+         const expr = parseExpression(parser);
+         consumeOrThrow(parser, TokenType.SEMICOLON);
+         return new Assignment(leftHandExpr, new Binary(leftHandExpr, expr, ArithmeticOp.ADD));
+
+      } else if (consume(parser, TokenType.DASH_EQUAL)) {
+         const expr = parseExpression(parser);
+         consumeOrThrow(parser, TokenType.SEMICOLON);
+         return new Assignment(leftHandExpr,
+            new Binary(leftHandExpr, expr, ArithmeticOp.SUBTRACT),
+         );
+
+      } else if (consume(parser, TokenType.STAR_EQUAL)) {
+         const expr = parseExpression(parser);
+         consumeOrThrow(parser, TokenType.SEMICOLON);
+         return new Assignment(leftHandExpr,
+            new Binary(leftHandExpr, expr, ArithmeticOp.MULTIPLY),
+         );
+
+      } else if (consume(parser, TokenType.SLASH_EQUAL)) {
+         const expr = parseExpression(parser);
+         consumeOrThrow(parser, TokenType.SEMICOLON);
+         return new Assignment(leftHandExpr,
+            new Binary(leftHandExpr, expr, ArithmeticOp.DIVIDE),
+         );
+
+      } else {
+         return throwError(parser, TokenType.EQUAL);
+      }
+   } else {
+      consumeOrThrow(parser, TokenType.SEMICOLON);
+      return new ExpressionStmt(leftHandExpr);
+   }
+}
+
+function parseLoop(parser: Parser): Statement {
+   consumeOrThrow(parser, TokenType.LOOP);
+   consumeOrThrow(parser, TokenType.LEFT_PARENTHESIS);
+
+   const condition = parseExpression(parser);
+
+   consumeOrThrow(parser, TokenType.RIGHT_PARENTHESIS);
+
+   const block = parseBlock(parser, true);
+
+   return new Loop(condition, block);
+}
+
+function parseIfElse(
+   parser: Parser,
+   isInLoop: boolean,
+): Statement {
+   consumeOrThrow(parser, TokenType.IF);
+   consumeOrThrow(parser, TokenType.LEFT_PARENTHESIS);
+
+   const condition = parseExpression(parser);
+
+   consumeOrThrow(parser, TokenType.RIGHT_PARENTHESIS);
+
+   const block = parseBlock(parser, isInLoop);
+
+   const elseIfs: IfElseArm[] = [];
+   let elseArm: Statement[] = [];
+
+   loopTill(parser, {
+      condition: "in",
+      tokens: [TokenType.ELSE],
+   }, () => {
+      consumeOrThrow(parser, TokenType.ELSE);
+
+      if (consume(parser, TokenType.IF)) {
+         consumeOrThrow(parser, TokenType.LEFT_PARENTHESIS);
+
+         const innerCondition = parseExpression(parser);
+
+         consumeOrThrow(parser, TokenType.RIGHT_PARENTHESIS);
+
+         const innerBlock = parseBlock(parser, isInLoop);
+         elseIfs.push({
+            condition: innerCondition,
+            block: innerBlock,
+         });
+         return false;
+      } else {
+         elseArm = parseBlock(parser, isInLoop);
+         return true;
+      }
+   });
+
+   return new IfElse({
+      condition,
+      block,
+   }, elseIfs, elseArm);
+}
+
+function parseReturn(parser: Parser): Statement {
+   consumeOrThrow(parser, TokenType.RETURN);
+
+   if (!consume(parser, TokenType.SEMICOLON)) {
+      const expr = parseExpression(parser);
+      consumeOrThrow(parser, TokenType.SEMICOLON);
+      return new Return(expr);
+   } else {
+      return new Return(undefined);
+   }
+}
+
+function parseWhen(
+   parser: Parser,
+   isInLoop: boolean,
+): Statement {
+   consumeOrThrow(parser, TokenType.WHEN);
+   consumeOrThrow(parser, TokenType.LEFT_PARENTHESIS);
+
+   const expr = parseExpression(parser);
+
+   consumeOrThrow(parser, TokenType.RIGHT_PARENTHESIS);
+   consumeOrThrow(parser, TokenType.LEFT_CURLY_BRACKET);
+
+   const arms: WhenArm[] = [];
+   let elseArm: Statement[] | Expression | undefined = undefined;
+
+   loopTill(parser, {
+      condition: "not-in",
+      tokens: [TokenType.RIGHT_CURLY_BRACKET],
+   }, () => {
+      const expr = parseExpression(parser);
+      consumeOrThrow(parser, TokenType.COLON_COLON);
+
+      let block: Statement[] | Expression | undefined = undefined;
+
+      const peekedType = peekType(parser);
+      if (peekedType === TokenType.LEFT_CURLY_BRACKET) {
+         block = parseBlock(parser, isInLoop);
+      } else {
+         block = parseExpression(parser);
+      }
+
+      checkComma(parser, TokenType.RIGHT_CURLY_BRACKET);
+
+      if (expr instanceof SimpleName && expr.value === "else") {
+         elseArm = block;
+         return true;
+      } else {
+         arms.push({
+            condition: expr,
+            block,
+         });
+         return false;
+      }
+   });
+
+   consumeOrThrow(parser, TokenType.RIGHT_CURLY_BRACKET);
+
+   return new When(expr, arms, elseArm);
 }
 
 function parseExpression(parser: Parser): Expression {
-   return parseAssignment(parser);
-}
-
-function parseAssignment(parser: Parser): Expression {
-   const expr: Expression = parseLogicOr(parser);
-
-   if (!isIdentifier(expr) && !isMemberAccess(expr)) {
-      return expr;
-   }
-   const name = { ...expr };
-
    switch (peekType(parser)) {
-      case TokenType.EQUAL:
-         consumeOrThrow(parser, TokenType.EQUAL);
-         return {
-            expressionType: ExpressionType.Assignment,
-            name,
-            expression: parseLogicOr(parser),
-         } as Assignment;
-      case TokenType.PLUS_EQUAL:
-         consumeOrThrow(parser, TokenType.PLUS_EQUAL);
-         return {
-            expressionType: ExpressionType.Assignment,
-            name,
-            expression: {
-               expressionType: ExpressionType.Binary,
-               left: expr,
-               op: BinaryOp.ADD,
-               right: parseLogicOr(parser),
-            } as BinaryExpression,
-         } as Assignment;
-      case TokenType.DASH_EQUAL:
-         consumeOrThrow(parser, TokenType.DASH_EQUAL);
-         return {
-            expressionType: ExpressionType.Assignment,
-            name,
-            expression: {
-               expressionType: ExpressionType.Binary,
-               left: expr,
-               op: BinaryOp.SUBTRACT,
-               right: parseLogicOr(parser),
-            } as BinaryExpression,
-         } as Assignment;
-      case TokenType.STAR_EQUAL:
-         consumeOrThrow(parser, TokenType.STAR_EQUAL);
-         return {
-            expressionType: ExpressionType.Assignment,
-            name,
-            expression: {
-               expressionType: ExpressionType.Binary,
-               left: expr,
-               op: BinaryOp.MULTIPLY,
-               right: parseLogicOr(parser),
-            } as BinaryExpression,
-         } as Assignment;
-      case TokenType.SLASH_EQUAL:
-         consumeOrThrow(parser, TokenType.SLASH_EQUAL);
-         return {
-            expressionType: ExpressionType.Assignment,
-            name,
-            expression: {
-               expressionType: ExpressionType.Binary,
-               left: expr,
-               op: BinaryOp.DIVIDE,
-               right: parseLogicOr(parser),
-            } as BinaryExpression,
-         } as Assignment;
+      case TokenType.MUT:
+      case TokenType.LEFT_CURLY_BRACKET:
+         return parseStructLiteral(parser);
+      case TokenType.LEFT_BRACKET:
+         return parseArrayLiteral(parser);
       default:
-         return expr;
+         return parseBinary(parser, 11);
    }
 }
 
-function parseLogicOr(parser: Parser): Expression {
-   let expr: Expression = parseLogicAnd(parser);
+function parseStructLiteral(parser: Parser): Expression {
+   const isMutable = consume(parser, TokenType.MUT);
+   const fields: StructLiteralField[] = [];
 
-   while (!isAtEnd(parser)) {
-      if (peekType(parser) === TokenType.PIPE_PIPE) {
-         consumeOrThrow(parser, TokenType.PIPE_PIPE);
-         expr = {
-            expressionType: ExpressionType.Binary,
-            left: expr,
-            op: BinaryOp.LOGIC_OR,
-            right: parseLogicAnd(parser),
-         } as BinaryExpression;
-      } else {
-         break;
+   consumeOrThrow(parser, TokenType.LEFT_CURLY_BRACKET);
+
+   loopTill(parser, {
+      condition: "not-in",
+      tokens: [TokenType.RIGHT_CURLY_BRACKET],
+   }, () => {
+      consumeOrThrow(parser, TokenType.DOT);
+
+      expectOrThrow(parser, TokenType.IDENTIFIER);
+      const name = getNext(parser)!.value;
+
+      if (consume(parser, TokenType.COMMA)) {
+         fields.push({
+            name: new SimpleName(name),
+            value: new SimpleName(name),
+         });
+         return false;
       }
-   }
+      consumeOrThrow(parser, TokenType.EQUAL);
+      const value = parseExpression(parser);
 
-   return expr;
+      checkComma(parser, TokenType.RIGHT_CURLY_BRACKET);
+
+      fields.push({
+         name: new SimpleName(name),
+         value,
+      });
+
+      return false;
+   });
+
+   consumeOrThrow(parser, TokenType.RIGHT_CURLY_BRACKET);
+
+   return new StructLiteral(isMutable, fields);
 }
 
-function parseLogicAnd(parser: Parser): Expression {
-   let expr: Expression = parseEquality(parser);
+function parseArrayLiteral(parser: Parser): Expression {
+   const values: Expression[] = [];
 
-   while (!isAtEnd(parser)) {
-      if (peekType(parser) === TokenType.AND_AND) {
-         consumeOrThrow(parser, TokenType.AND_AND);
-         expr = {
-            expressionType: ExpressionType.Binary,
-            left: expr,
-            op: BinaryOp.LOGIC_AND,
-            right: parseEquality(parser),
-         } as BinaryExpression;
-      } else {
-         break;
-      }
-   }
+   consumeOrThrow(parser, TokenType.LEFT_BRACKET);
 
-   return expr;
+   loopTill(parser, {
+      condition: "not-in",
+      tokens: [TokenType.RIGHT_BRACKET],
+   }, () => {
+      values.push(parseExpression(parser));
+
+      checkComma(parser, TokenType.RIGHT_BRACKET);
+
+      return false;
+   });
+
+   consumeOrThrow(parser, TokenType.RIGHT_BRACKET);
+
+   return new ArrayLiteral(values);
 }
 
-function parseEquality(parser: Parser): Expression {
-   let expr: Expression = parseComparison(parser);
+function parseBinary(
+   parser: Parser,
+   fromIndex: number,
+): Expression {
+   const sortedOperators = [
+      TokenType.STAR,
+      TokenType.SLASH,
+      TokenType.PLUS,
+      TokenType.DASH,
+      TokenType.GREATER,
+      TokenType.GREATER_EQUAL,
+      TokenType.SMALLER,
+      TokenType.SMALLER_EQUAL,
+      TokenType.EQUAL_EQUAL,
+      TokenType.BANG_EQUAL,
+      TokenType.AND_AND,
+      TokenType.PIPE_PIPE,
+   ];
 
-   while (!isAtEnd(parser)) {
-      if (peekType(parser) === TokenType.EQUAL_EQUAL) {
-         consumeOrThrow(parser, TokenType.EQUAL_EQUAL);
-         expr = {
-            expressionType: ExpressionType.Binary,
-            left: expr,
-            op: BinaryOp.LOGIC_EQUAL,
-            right: parseComparison(parser),
-         } as BinaryExpression;
-      } else if (peekType(parser) === TokenType.BANG_EQUAL) {
-         consumeOrThrow(parser, TokenType.BANG_EQUAL);
-         expr = {
-            expressionType: ExpressionType.Binary,
-            left: expr,
-            op: BinaryOp.LOGIC_NOT_EQUAL,
-            right: parseComparison(parser),
-         } as BinaryExpression;
-      } else {
-         break;
-      }
+   const sortedBinaryAndArithmeticOp = [
+      ArithmeticOp.MULTIPLY,
+      ArithmeticOp.DIVIDE,
+      ArithmeticOp.ADD,
+      ArithmeticOp.SUBTRACT,
+      BooleanOp.GREATER,
+      BooleanOp.GREATER_EQUAL,
+      BooleanOp.SMALLER,
+      BooleanOp.SMALLER_EQUAL,
+      BooleanOp.EQUAL,
+      BooleanOp.NOT_EQUAL,
+      BooleanOp.AND,
+      BooleanOp.OR,
+   ];
+
+   if (fromIndex === -1) {
+      return parsePrefix(parser);
    }
 
-   return expr;
-}
+   let left: Expression = parseBinary(parser, fromIndex - 1);
+   loopTill(parser, {
+      condition: "in",
+      tokens: [sortedOperators[fromIndex]],
+   }, () => {
+      consumeOrThrow(parser, sortedOperators[fromIndex]);
+      left = new Binary(left,
+         parseBinary(parser, fromIndex - 1),
+         sortedBinaryAndArithmeticOp[fromIndex],
+      );
+      return false;
+   });
 
-function parseComparison(parser: Parser): Expression {
-   let expr: Expression = parseAddition(parser);
-
-   while (!isAtEnd(parser)) {
-      if (peekType(parser) === TokenType.GREATER) {
-         consumeOrThrow(parser, TokenType.GREATER);
-         expr = {
-            expressionType: ExpressionType.Binary,
-            left: expr,
-            op: BinaryOp.GREATER,
-            right: parseAddition(parser),
-         } as BinaryExpression;
-      } else if (peekType(parser) === TokenType.GREATER_EQUAL) {
-         consumeOrThrow(parser, TokenType.GREATER_EQUAL);
-         expr = {
-            expressionType: ExpressionType.Binary,
-            left: expr,
-            op: BinaryOp.GREATER_EQUAL,
-            right: parseAddition(parser),
-         } as BinaryExpression;
-      } else if (peekType(parser) === TokenType.SMALLER) {
-         consumeOrThrow(parser, TokenType.SMALLER);
-         expr = {
-            expressionType: ExpressionType.Binary,
-            left: expr,
-            op: BinaryOp.SMALLER,
-            right: parseAddition(parser),
-         } as BinaryExpression;
-      } else if (peekType(parser) === TokenType.SMALLER_EQUAL) {
-         consumeOrThrow(parser, TokenType.SMALLER_EQUAL);
-         expr = {
-            expressionType: ExpressionType.Binary,
-            left: expr,
-            op: BinaryOp.SMALLER_EQUAL,
-            right: parseAddition(parser),
-         } as BinaryExpression;
-      } else {
-         break;
-      }
-   }
-
-   return expr;
-}
-
-function parseAddition(parser: Parser): Expression {
-   let expr: Expression = parseMultiplication(parser);
-
-   while (!isAtEnd(parser)) {
-      if (peekType(parser) === TokenType.PLUS) {
-         consumeOrThrow(parser, TokenType.PLUS);
-         expr = {
-            expressionType: ExpressionType.Binary,
-            left: expr,
-            op: BinaryOp.ADD,
-            right: parseMultiplication(parser),
-         } as BinaryExpression;
-      } else if (peekType(parser) === TokenType.DASH) {
-         consumeOrThrow(parser, TokenType.DASH);
-         expr = {
-            expressionType: ExpressionType.Binary,
-            left: expr,
-            op: BinaryOp.SUBTRACT,
-            right: parseMultiplication(parser),
-         } as BinaryExpression;
-      } else {
-         break;
-      }
-   }
-
-   return expr;
-}
-
-function parseMultiplication(parser: Parser): Expression {
-   let expr: Expression = parsePrefix(parser);
-
-   while (!isAtEnd(parser)) {
-      if (peekType(parser) === TokenType.STAR) {
-         consumeOrThrow(parser, TokenType.STAR);
-         expr = {
-            expressionType: ExpressionType.Binary,
-            left: expr,
-            op: BinaryOp.MULTIPLY,
-            right: parsePrefix(parser),
-         } as BinaryExpression;
-      } else if (peekType(parser) === TokenType.SLASH) {
-         consumeOrThrow(parser, TokenType.SLASH);
-         expr = {
-            expressionType: ExpressionType.Binary,
-            left: expr,
-            op: BinaryOp.DIVIDE,
-            right: parsePrefix(parser),
-         } as BinaryExpression;
-      } else {
-         break;
-      }
-   }
-
-   return expr;
+   return left;
 }
 
 function parsePrefix(parser: Parser): Expression {
    switch (peekType(parser)) {
-      case TokenType.DASH_DASH:
-         consumeOrThrow(parser, TokenType.DASH_DASH);
-         return {
-            expressionType: ExpressionType.Binary,
-            left: parsePostfix(parser),
-            op: BinaryOp.SUBTRACT,
-            right: {
-               expressionType: ExpressionType.IntLiteral,
-               value: 1,
-            } as IntLiteral,
-         } as BinaryExpression;
-      case TokenType.DASH:
-         consumeOrThrow(parser, TokenType.DASH);
-         return {
-            expressionType: ExpressionType.Binary,
-            left: {
-               expressionType: ExpressionType.IntLiteral,
-               value: -1,
-            } as IntLiteral,
-            op: BinaryOp.MULTIPLY,
-            right: parsePostfix(parser),
-         } as BinaryExpression;
-      case TokenType.PLUS_PLUS:
-         consumeOrThrow(parser, TokenType.PLUS_PLUS);
-         return {
-            expressionType: ExpressionType.Binary,
-            left: parsePostfix(parser),
-            op: BinaryOp.ADD,
-            right: {
-               expressionType: ExpressionType.IntLiteral,
-               value: 1,
-            } as IntLiteral,
-         } as BinaryExpression;
+      // TODO: Add --, ++, -
       case TokenType.BANG:
-         consumeOrThrow(parser, TokenType.BANG);
-         return {
-            expressionType: ExpressionType.Negate,
-            expression: parsePostfix(parser),
-         } as BinaryNegate;
+         consume(parser, TokenType.BANG);
+         return new BooleanNegate(parsePostfix(parser));
+      default:
+         return parsePostfix(parser);
    }
-   return parsePostfix(parser);
 }
 
 function parsePostfix(parser: Parser): Expression {
-   let intermediate = parsePrimary(parser);
-
-   while (!isAtEnd(parser)) {
-      const peekTokenType = peekType(parser);
-      if (peekTokenType === TokenType.DOT) {
-         consumeOrThrow(parser, TokenType.DOT);
-         expectOrThrow(parser, TokenType.IDENTIFIER);
-
-         if (!isIdentifier(intermediate) && !isCall(intermediate) &&
-             !isMemberAccess(intermediate)) {
-            throw new Error(
-               "Can only call Member access on identifiers, function calls or previous member accessing");
-         }
-
-         intermediate = {
-            expressionType: ExpressionType.MemberAccess,
-            expression: intermediate,
-            member: getNext(parser)!!.value,
-         } as MemberAccess;
-      } else if (peekTokenType === TokenType.LEFT_PARENTHESIS) {
-         if (!isIdentifier(intermediate)) {
-            throwError(parser, TokenType.IDENTIFIER);
-         }
-         const name = (intermediate as Identifier).identifier;
-
-         const args: Expression[] = [];
-
-         consumeOrThrow(parser, TokenType.LEFT_PARENTHESIS);
-         while (!isAtEnd(parser) && peekType(parser) !== TokenType.RIGHT_PARENTHESIS) {
-            args.push(parseExpression(parser));
-
-            if (!consume(parser, TokenType.COMMA) && peekType(parser) !==
-                TokenType.RIGHT_PARENTHESIS) {
-               throwError(parser, TokenType.COMMA, TokenType.RIGHT_PARENTHESIS);
-            }
-         }
-         consumeOrThrow(parser, TokenType.RIGHT_PARENTHESIS);
-
-         intermediate = {
-            expressionType: ExpressionType.Call,
-            name,
-            arguments: args,
-         } as Call;
-      } else {
-         break;
-      }
+   let primary: Expression = parsePrimary(parser);
+   if (primary instanceof GenericName) {
+      return primary;
    }
-   return intermediate;
+
+   loopTill(parser, {
+         condition: "in",
+         tokens: [TokenType.LEFT_PARENTHESIS, TokenType.LEFT_BRACKET, TokenType.DOT],
+      },
+      type => {
+         switch (type) {
+            case TokenType.LEFT_PARENTHESIS:
+               consumeOrThrow(parser, TokenType.LEFT_PARENTHESIS);
+               primary = new Postfix(primary, finishParseCall(parser));
+               return false;
+            case TokenType.LEFT_BRACKET:
+               consumeOrThrow(parser, TokenType.LEFT_BRACKET);
+               primary = new Postfix(primary, finishParseIndex(parser));
+               return false;
+            case TokenType.DOT:
+               consumeOrThrow(parser, TokenType.DOT);
+               const part = finishParseMember(parser);
+               if (primary instanceof GenericName) {
+                  primary.parts.push(part);
+               } else {
+                  primary = new GenericName([
+                     {
+                        name: primary,
+                        generics: [],
+                     }, part,
+                  ]);
+               }
+               return false;
+            default:
+               return true;
+         }
+      },
+   );
+
+   return primary;
+}
+
+function finishParseCall(parser: Parser): Call {
+   const values: Expression[] = [];
+
+   loopTill(parser, {
+      condition: "not-in",
+      tokens: [TokenType.RIGHT_PARENTHESIS],
+   }, () => {
+      values.push(parseExpression(parser));
+
+      checkComma(parser, TokenType.RIGHT_PARENTHESIS);
+
+      return true;
+   });
+
+   consumeOrThrow(parser, TokenType.RIGHT_PARENTHESIS);
+
+   return new Call(values);
+}
+
+function finishParseMember(parser: Parser): GenericNamePart {
+   const value = parseIdentifier(parser);
+
+   if (value instanceof SimpleName) {
+      return {
+         name: value,
+         generics: [],
+      };
+   }
+
+   return value;
+}
+
+function finishParseIndex(parser: Parser): Index {
+   const value = parseExpression(parser);
+   consumeOrThrow(parser, TokenType.RIGHT_BRACKET);
+   return new Index(value);
 }
 
 function parsePrimary(parser: Parser): Expression {
    switch (peekType(parser)) {
       case TokenType.LEFT_PARENTHESIS:
-         consumeOrThrow(parser, TokenType.LEFT_PARENTHESIS);
+         consume(parser, TokenType.LEFT_PARENTHESIS);
          const expr = parseExpression(parser);
-         consumeOrThrow(parser, TokenType.RIGHT_PARENTHESIS);
+         consumeOrThrow(parser, TokenType.LEFT_PARENTHESIS);
          return expr;
       case TokenType.TRUE:
-         consumeOrThrow(parser, TokenType.TRUE);
-         return {
-            expressionType: ExpressionType.BooleanLiteral,
-            value: true,
-         } as BooleanLiteral;
       case TokenType.FALSE:
-         consumeOrThrow(parser, TokenType.FALSE);
-         return {
-            expressionType: ExpressionType.BooleanLiteral,
-            value: false,
-         } as BooleanLiteral;
+         const boolValue = Boolean(getNext(parser)!.value);
+         return new BoolLiteral(boolValue);
       case TokenType.STRING:
-         return {
-            expressionType: ExpressionType.StringLiteral,
-            value: getNext(parser)!!.value,
-         } as StringLiteral;
+         const stringValue = getNext(parser)!.value;
+         return new StringLiteral(stringValue);
       case TokenType.CHAR:
-         return {
-            expressionType: ExpressionType.CharLiteral,
-            value: getNext(parser)!!.value,
-         } as CharLiteral;
+         const charValue = getNext(parser)!.value;
+         return new CharLiteral(charValue);
       case TokenType.INT:
-         return {
-            expressionType: ExpressionType.IntLiteral,
-            value: parseInt(getNext(parser)!!.value, 10),
-         } as IntLiteral;
+         const intValue = parseInt(getNext(parser)!.value, 10);
+         return new IntLiteral(intValue);
       case TokenType.DOUBLE:
-         return {
-            expressionType: ExpressionType.DoubleLiteral,
-            value: parseFloat(getNext(parser)!!.value),
-         } as DoubleLiteral;
-      case TokenType.THIS:
-         consumeOrThrow(parser, TokenType.THIS);
-         return {
-            expressionType: ExpressionType.Identifier,
-            identifier: "this",
-         } as Identifier;
+         const doubleValue = parseFloat(getNext(parser)!.value);
+         return new DoubleLiteral(doubleValue);
       case TokenType.IDENTIFIER:
-         return {
-            expressionType: ExpressionType.Identifier,
-            identifier: getNext(parser)!!.value,
-         } as Identifier;
-      case TokenType.LEFT_CURLY_BRACKET:
-         return parseStructLiteral(parser);
+         const id = parseIdentifier(parser);
+         if (id instanceof SimpleName) {
+            return id;
+         } else {
+            return new GenericName([id]);
+         }
       default:
-         throwError(parser,
-            TokenType.IDENTIFIER,
-            TokenType.TRUE,
-            TokenType.FALSE,
-            TokenType.INT,
-            TokenType.DOUBLE,
-         );
+         const peeked = peek(parser);
+         throw new Error(`Expecting expression at ${ peeked.sourcePosition.fileName }::${ peeked.sourcePosition.lineIdx }. Found: ${ peeked.type } -> '${ peeked.value }'`);
    }
-   return {
-      expressionType: ExpressionType.Identifier,
-      identifier: "",
-   } as Identifier;
 }
 
-function parseStructLiteral(parser: Parser): Expression {
-   consumeOrThrow(parser, TokenType.LEFT_CURLY_BRACKET);
+function parseIdentifier(parser: Parser): SimpleName | GenericNamePart {
+   expectOrThrow(parser, TokenType.IDENTIFIER);
 
-   const assignments: StructLiteralAssignment[] = [];
-   while (!isAtEnd(parser) && peekType(parser) != TokenType.RIGHT_CURLY_BRACKET) {
-      consumeOrThrow(parser, TokenType.DOT);
+   const identifier = getNext(parser)!.value;
 
-      expectOrThrow(parser, TokenType.IDENTIFIER);
-      const name = getNext(parser)!!.value;
+   if (canParseGenericPart(parser, parser.currentIdx) === -1) {
+      return new SimpleName(identifier);
+   } else {
+      return parseGenericPart(parser, new SimpleName(identifier));
+   }
+}
 
-      consumeOrThrow(parser, TokenType.EQUAL);
+function parseGenericPart(
+   parser: Parser,
+   identifier: SimpleName,
+): GenericNamePart {
+   const generics: GenericName[] = [];
 
-      const value = parseExpression(parser);
+   consumeOrThrow(parser, TokenType.SMALLER);
 
-      if (!consume(parser, TokenType.COMMA) && peekType(parser) !=
-          TokenType.RIGHT_CURLY_BRACKET) {
-         throwError(parser, TokenType.COMMA, TokenType.RIGHT_CURLY_BRACKET);
+   loopTill(parser, {
+      tokens: [TokenType.GREATER],
+      condition: "not-in",
+   }, () => {
+      const genericParam = parseIdentifier(parser);
+      if (genericParam instanceof SimpleName) {
+         generics.push(new GenericName([
+            {
+               name: genericParam,
+               generics: [],
+            },
+         ]));
+      } else {
+         generics.push(new GenericName([genericParam]));
       }
 
-      assignments.push({
-         name,
-         value,
-      });
-   }
+      while (peekType(parser) === TokenType.DOT) {
+         consumeOrThrow(parser, TokenType.DOT);
 
-   consumeOrThrow(parser, TokenType.RIGHT_CURLY_BRACKET);
+         const genericParam = parseIdentifier(parser);
+         if (genericParam instanceof SimpleName) {
+            generics.push(new GenericName([
+               {
+                  name: genericParam,
+                  generics: [],
+               },
+            ]));
+         } else {
+            generics.push(new GenericName([genericParam]));
+         }
+      }
+
+      checkComma(parser, TokenType.GREATER);
+
+      return false;
+   });
+
+   consumeOrThrow(parser, TokenType.GREATER);
 
    return {
-      expressionType: ExpressionType.StructLiteral,
-      assignments,
-   } as StructLiteral;
+      name: identifier,
+      generics,
+   };
+}
+
+/**
+ * Returns -1 when not possible to parse a full generic name
+ * Else returns index of next token to check
+ * @param parser
+ * @param startIdx
+ */
+function canParseGenericPart(
+   parser: Parser,
+   startIdx: number,
+): number {
+   const localPeek = () => parser.tokens[startIdx];
+   const localPeekType = () => localPeek().type;
+   const localGetNext = () => parser.tokens[startIdx++];
+
+   if (localPeekType() === TokenType.SMALLER) {
+      localGetNext(); // SMALLER
+      while (true) {
+         let gotIdentifier: boolean = false;
+         while ([TokenType.IDENTIFIER, TokenType.DOT].includes(localPeekType())) {
+            const next = localGetNext();
+            gotIdentifier = next.type === TokenType.IDENTIFIER;
+         }
+         if (!gotIdentifier) {
+            return -1;
+         }
+
+         if (localPeekType() === TokenType.SMALLER) {
+            startIdx = canParseGenericPart(parser, startIdx);
+            if (startIdx === -1) {
+               break;
+            }
+         }
+
+         if (![TokenType.COMMA, TokenType.GREATER].includes(localPeekType())) {
+            return -1;
+         }
+
+         if (localPeekType() === TokenType.COMMA) {
+            localGetNext(); // COMMA
+         }
+
+         if (localPeekType() === TokenType.GREATER) {
+            localGetNext();
+            return startIdx;
+         }
+      }
+   }
+
+   return -1;
+}
+
+function parseFullGenericName(parser: Parser): GenericName {
+   expectOrThrow(parser, TokenType.IDENTIFIER);
+
+   const nameParts: GenericNamePart[] = [];
+
+   while (true) {
+      let intermediateName = parseIdentifier(parser);
+      if (intermediateName instanceof SimpleName) {
+         nameParts.push({
+            name: intermediateName,
+            generics: [],
+         });
+      } else {
+         nameParts.push(intermediateName);
+      }
+
+      if (!consume(parser, TokenType.DOT)) {
+         break;
+      }
+   }
+
+   return new GenericName(nameParts);
 }

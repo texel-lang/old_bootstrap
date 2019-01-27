@@ -1,32 +1,50 @@
-enum Foo {
-    Bar,
-    Baz,
-    WOW,
+enum Direction {
+    NORTH,
+    EAST,
+    SOUTH,
+    WEST
 }
 
-alias Bar = Foo.Bar;
-
-interface X <T, T : double> {
-
-    mut fn doFoo(Bar baz): double[];
+struct Vector {
+    Direction direction;
+    double x;
+    double y;
 }
 
-mut fn DooStuff(boolean jep): void {
-    return;
+fn Direction.opposite(): Direction {
+    when (this) {
+        NORTH :: {
+            return Direction.SOUTH;
+        },
+        EAST :: {
+            return Direction.WEST;
+        },
+        SOUTH :: {
+            return Direction.NORTH;
+        },
+        WEST :: {
+            return Direction.EAST;
+        },
+
+    }
 }
 
-closed struct Optional<T> {
-    boolean isMyField = true;
+fn main(): void {
+    Direction dir = Direction.WEST;
+    Direction oppositeDir = dir.opposite();
 
-    struct Ok {
-        T result;
+    if (oppositeDir == Direction.WEST) {
+        // should never happen....
+        println("Oops...");
+    } else {
+        println("Neat...");
     }
 
-    struct Err {
-        Error err;
-    }
-}
+    Vector v = {
+        .dir,
+        .x = 4.5,
+        .y = 2.3,
+    };
 
-fn Optional<Foo>.Err.print(): void {
-    console.log(this.err.message);
+    console.log(v.dir.opposite());
 }

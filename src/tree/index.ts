@@ -30,7 +30,20 @@ export class ExportDeclaration {
    }
 }
 
+export interface DeclarationVisitor {
+   visitStruct(struct: Struct): void;
+
+   visitFunction(func: FunctionDecl): void;
+
+   visitInterface(interFace: Interface): void;
+
+   visitAlias(aliased: Alias): void;
+
+   visitEnum(enumeration: Enum): void;
+}
+
 export interface Declaration {
+   visit<T extends DeclarationVisitor>(visitor: T): void;
 }
 
 export interface GenericDeclaration {
@@ -81,6 +94,10 @@ export class Struct implements Declaration {
       this.innerStructs = innerStructs;
    }
 
+   public visit<T extends DeclarationVisitor>(visitor: T): void {
+      visitor.visitStruct(this);
+   }
+
 }
 
 export class FunctionDecl implements Declaration {
@@ -106,6 +123,11 @@ export class FunctionDecl implements Declaration {
       this.returnType = returnType;
       this.body = body;
    }
+
+   public visit<T extends DeclarationVisitor>(visitor: T): void {
+      visitor.visitFunction(this);
+   }
+
 }
 
 export interface InterfaceFunction {
@@ -129,6 +151,11 @@ export class Interface implements Declaration {
       this.generics = generics;
       this.functionDeclarations = functionDeclarations;
    }
+
+   public visit<T extends DeclarationVisitor>(visitor: T): void {
+      visitor.visitInterface(this);
+   }
+
 }
 
 export class Alias implements Declaration {
@@ -142,6 +169,11 @@ export class Alias implements Declaration {
       this.name = name;
       this.aliased = aliased;
    }
+
+   public visit<T extends DeclarationVisitor>(visitor: T): void {
+      visitor.visitAlias(this);
+   }
+
 }
 
 export class Enum implements Declaration {
@@ -154,6 +186,10 @@ export class Enum implements Declaration {
    ) {
       this.name = name;
       this.values = values;
+   }
+
+   public visit<T extends DeclarationVisitor>(visitor: T): void {
+      visitor.visitEnum(this);
    }
 }
 
@@ -338,11 +374,11 @@ export class BooleanNegate implements Expression {
 
 export class Postfix implements Expression {
    public left: Expression;
-   public operation: Call | Index;
+   public operation: Call | Index | Member;
 
    constructor(
       left: Expression,
-      operation: Call | Index,
+      operation: Call | Index | Member,
    ) {
       this.left = left;
       this.operation = operation;
@@ -362,6 +398,14 @@ export class Index implements Expression {
 
    constructor(value: Expression) {
       this.value = value;
+   }
+}
+
+export class Member {
+   public right: SimpleName | GenericNamePart;
+
+   constructor(right: SimpleName | GenericNamePart) {
+      this.right = right;
    }
 }
 
@@ -414,7 +458,7 @@ export class SimpleName implements Expression {
 }
 
 export interface GenericNamePart {
-   name: SimpleName | Expression;
+   name: SimpleName;
    generics: GenericName[];
 }
 

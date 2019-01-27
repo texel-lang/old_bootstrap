@@ -114,7 +114,7 @@ returnStatement ::
 whenStatement ::
     "when" "(" expression ")" "{"
     ( expression "::" ( block | expression ))[", "]
-    ( else "::" ( block | expression ) )? "}"
+    ( else "::" ( block | expression ) )? ","? "}"
 
 expression ::
     structLiteral |
@@ -149,13 +149,16 @@ prefix ::
     ("--" | "-" | "++" | "!" )? postfix
 
 postfix ::
-    primary (call | index)*
+    primary (call | index | member)*
 
 call ::
     "(" expression[","] ")"
 
 index ::
     "[" expression "]"
+    
+member ::
+    "." genericName
 
 primary ::
     "(" expression ") |

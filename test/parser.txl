@@ -1,38 +1,32 @@
-struct Point {
-    double x = 1.345;
-    double y;
+enum Foo {
+    Bar,
+    Baz,
+    WOW,
 }
 
-fn createPoint(double x, double y): Point {
-    return {
-        .x = x,
-        .y = y,
-    };
+alias Bar = Foo.Bar;
+
+interface X <T, T : double> {
+
+    mut fn doFoo(Bar baz): double[];
 }
 
-fn main(): void {
-    Point point = createPoint(3, 4);
-    double x = createPoint(3, 4).x;
+mut fn DooStuff(boolean jep): void {
+    return;
+}
 
-    double y = point.y;
+closed struct Optional<T> {
+    boolean isMyField = true;
 
-    boolean bool = true;
-    double thing = 1 + 2.45;
-    loop (bool) {
-        bool = !bool;
+    struct Ok {
+        T result;
     }
 
-    if (point.x == 1) {
-        point.x = 5;
-//        point = {
-//            .x = 5,
-//            .y = 6,
-//        };
-    } else if (point.y == 2) {
-        point.y = 8;
-//        point = {
-//            .x = 7,
-//            .y = 8,
-//        };
+    struct Err {
+        Error err;
     }
+}
+
+fn Optional<Foo>.Err.print(): void {
+    console.log(this.err.message);
 }

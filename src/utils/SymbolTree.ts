@@ -26,23 +26,14 @@ export class SymbolTree {
    public children: SymbolTree[] = [];
    public value: SymbolValue;
 
-   constructor(
-      type: SymbolType,
-      path: string,
-      children: SymbolTree[],
-      value: SymbolValue,
-   ) {
+   constructor(type: SymbolType, path: string, children: SymbolTree[], value: SymbolValue) {
       this.type = type;
       this.path = path;
       this.children = children;
       this.value = value;
    }
 
-   public addValueToPath(
-      path: string[],
-      type: SymbolType,
-      value: SymbolValue,
-   ): SymbolTree {
+   public addValueToPath(path: string[], type: SymbolType, value: SymbolValue): SymbolTree {
       const child = this.findChildAtPath(path);
       child.type = type;
       child.value = value;
@@ -51,8 +42,7 @@ export class SymbolTree {
    }
 
    public findChildAtPath(path: string[]): SymbolTree {
-      let child = this.children.find(
-         child => child.path === path[0]);
+      let child = this.children.find(child => child.path === path[0]);
 
       if (child === undefined) {
          const newChild = new SymbolTree(SymbolType.UNKNOWN, path[0], [], undefined);
@@ -71,7 +61,6 @@ export class SymbolTree {
 
    public debugSymbolNameStructure(indent = " ") {
       console.log(indent, this.path);
-      this.children.forEach(
-         it => it.debugSymbolNameStructure(indent + "-"));
+      this.children.forEach(it => it.debugSymbolNameStructure(indent + "-"));
    }
 }

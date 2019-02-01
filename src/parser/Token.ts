@@ -111,10 +111,7 @@ interface Tokenizer {
  * Includes comment tokens ( one token per comment line.
  * If an error occured the last or second-last token should be an error token
  */
-export function getTokens(
-   fileName: string,
-   sourceString: string,
-): Token[] {
+export function getTokens(fileName: string, sourceString: string): Token[] {
    const tokenizer: Tokenizer = {
       fileName,
       sourceString,
@@ -299,10 +296,7 @@ function getNext(tokenizer: Tokenizer): string | undefined {
    }
 }
 
-function consume(
-   tokenizer: Tokenizer,
-   character: string,
-): boolean {
+function consume(tokenizer: Tokenizer, character: string): boolean {
    if (peek(tokenizer) != character) {
       return false;
    } else {
@@ -317,8 +311,8 @@ function isValidIdentifier(character: string): boolean {
       return false;
    }
    return (codePoint >= "a".codePointAt(0)!! && codePoint <= "z".codePointAt(0)!!) ||
-          (codePoint >= "A".codePointAt(0)!! && codePoint <= "Z".codePointAt(0)!!) ||
-          (codePoint == "_".codePointAt(0));
+      (codePoint >= "A".codePointAt(0)!! && codePoint <= "Z".codePointAt(0)!!) ||
+      (codePoint == "_".codePointAt(0));
 }
 
 function isValidNumber(character: string): boolean {
@@ -327,7 +321,7 @@ function isValidNumber(character: string): boolean {
       return false;
    }
    return (codePoint >= "0".codePointAt(0)!! && codePoint <= "9".codePointAt(0)!!) ||
-          (codePoint == ".".codePointAt(0));
+      (codePoint == ".".codePointAt(0));
 }
 
 function skipWhitespace(tokenizer: Tokenizer): void {
@@ -345,10 +339,7 @@ function resetStartAndCurrentIdx(tokenizer: Tokenizer): void {
    tokenizer.startIdx = tokenizer.currentIdx;
 }
 
-function buildToken(
-   tokenizer: Tokenizer,
-   type: TokenType,
-): Token {
+function buildToken(tokenizer: Tokenizer, type: TokenType): Token {
    return {
       type,
       sourcePosition: {
@@ -359,10 +350,7 @@ function buildToken(
    };
 }
 
-function buildUnknownToken(
-   tokenizer: Tokenizer,
-   expected: string,
-): Token {
+function buildUnknownToken(tokenizer: Tokenizer, expected: string): Token {
    return {
       type: TokenType.ERROR,
       value: `Found '${ peek(tokenizer) }'. Expected '${ expected }'.`,

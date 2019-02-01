@@ -164,10 +164,7 @@ export class Alias implements Declaration {
    public name: SimpleName;
    public aliased: GenericName;
 
-   constructor(
-      name: SimpleName,
-      aliased: GenericName,
-   ) {
+   constructor(name: SimpleName, aliased: GenericName) {
       this.name = name;
       this.aliased = aliased;
    }
@@ -182,10 +179,7 @@ export class Enum implements Declaration {
    public name: SimpleName;
    public values: SimpleName[];
 
-   constructor(
-      name: SimpleName,
-      values: SimpleName[],
-   ) {
+   constructor(name: SimpleName, values: SimpleName[]) {
       this.name = name;
       this.values = values;
    }
@@ -250,10 +244,7 @@ export class Assignment implements Statement {
    public name: SimpleName | Index;
    public value: Expression;
 
-   constructor(
-      name: SimpleName | Index,
-      value: Expression,
-   ) {
+   constructor(name: SimpleName | Index, value: Expression) {
       this.name = name;
       this.value = value;
    }
@@ -296,10 +287,7 @@ export class Loop implements Statement {
    public condition: Expression;
    public block: Statement[];
 
-   constructor(
-      condition: Expression,
-      block: Statement[],
-   ) {
+   constructor(condition: Expression, block: Statement[]) {
       this.condition = condition;
       this.block = block;
    }
@@ -320,11 +308,7 @@ export class IfElse implements Statement {
    public elseIfs: IfElseArm[];
    public elseArm: Statement[];
 
-   constructor(
-      ifArm: IfElseArm,
-      elseIfs: IfElseArm[],
-      elseArm: Statement[],
-   ) {
+   constructor(ifArm: IfElseArm, elseIfs: IfElseArm[], elseArm: Statement[]) {
       this.ifArm = ifArm;
       this.elseIfs = elseIfs;
       this.elseArm = elseArm;
@@ -421,10 +405,7 @@ export class StructLiteral implements Expression {
    public isMutable: boolean;
    public fields: StructLiteralField[];
 
-   constructor(
-      isMutable: boolean,
-      fields: StructLiteralField[],
-   ) {
+   constructor(isMutable: boolean, fields: StructLiteralField[]) {
       this.isMutable = isMutable;
       this.fields = fields;
    }
@@ -451,7 +432,8 @@ export enum ArithmeticOp {
 }
 
 export enum BooleanOp {
-   GREATER = ArithmeticOp.SUBTRACT + 1, GREATER_EQUAL, SMALLER, SMALLER_EQUAL, EQUAL, NOT_EQUAL, AND, OR,
+   GREATER = ArithmeticOp.SUBTRACT +
+      1, GREATER_EQUAL, SMALLER, SMALLER_EQUAL, EQUAL, NOT_EQUAL, AND, OR,
 }
 
 export class Binary implements Expression {
@@ -459,11 +441,7 @@ export class Binary implements Expression {
    public right: Expression;
    public operator: ArithmeticOp | BooleanOp;
 
-   constructor(
-      left: Expression,
-      right: Expression,
-      operator: ArithmeticOp | BooleanOp,
-   ) {
+   constructor(left: Expression, right: Expression, operator: ArithmeticOp | BooleanOp) {
       this.left = left;
       this.right = right;
       this.operator = operator;
@@ -490,10 +468,7 @@ export class Postfix implements Expression {
    public left: Expression;
    public operation: Call | Index | Member;
 
-   constructor(
-      left: Expression,
-      operation: Call | Index | Member,
-   ) {
+   constructor(left: Expression, operation: Call | Index | Member) {
       this.left = left;
       this.operation = operation;
    }
@@ -632,7 +607,6 @@ export class GenericName implements Expression {
     * Generate a string array that can be used in the SymbolTree
     */
    public toPathString(): string[] {
-      return this.parts.map(
-         it => it.name.value);
+      return this.parts.map(it => it.name.value);
    }
 }

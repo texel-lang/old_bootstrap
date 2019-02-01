@@ -1,3 +1,5 @@
+import { SymbolTree } from "../utils/SymbolTree";
+
 export class TexelFile {
    imports: ImportDeclaration[];
    declarations: Declaration[];
@@ -193,7 +195,28 @@ export class Enum implements Declaration {
    }
 }
 
+export interface StatementVisitor {
+   visitAssignment(assignment: Assignment): void;
+
+   visitBreak(breakStmt: Break): void;
+
+   visitContinue(continueStmt: Continue): void;
+
+   visitExpression(expr: ExpressionStmt): void;
+
+   visitIfElse(ifElse: IfElse): void;
+
+   visitLoop(loop: Loop): void;
+
+   visitReturn(returnStmt: Return): void;
+
+   visitVariable(variable: Variable): void;
+
+   visitWhen(when: When): void;
+}
+
 export interface Statement {
+   visit<T extends StatementVisitor>(visitor: T): void;
 }
 
 export class Variable implements Statement {
@@ -216,6 +239,11 @@ export class Variable implements Statement {
       this.name = name;
       this.value = value;
    }
+
+   public visit<T extends StatementVisitor>(visitor: T): void {
+      visitor.visitVariable(this);
+   }
+
 }
 
 export class Assignment implements Statement {
@@ -229,6 +257,11 @@ export class Assignment implements Statement {
       this.name = name;
       this.value = value;
    }
+
+   public visit<T extends StatementVisitor>(visitor: T): void {
+      visitor.visitAssignment(this);
+   }
+
 }
 
 export class ExpressionStmt implements Statement {
@@ -237,13 +270,26 @@ export class ExpressionStmt implements Statement {
    constructor(expression: Expression) {
       this.expression = expression;
    }
+
+   public visit<T extends StatementVisitor>(visitor: T): void {
+      visitor.visitExpression(this);
+   }
+
 }
 
 export class Break implements Statement {
+   public visit<T extends StatementVisitor>(visitor: T): void {
+      visitor.visitBreak(this);
+   }
 
 }
 
 export class Continue implements Statement {
+
+   public visit<T extends StatementVisitor>(visitor: T): void {
+      visitor.visitContinue(this);
+   }
+
 }
 
 export class Loop implements Statement {
@@ -257,6 +303,11 @@ export class Loop implements Statement {
       this.condition = condition;
       this.block = block;
    }
+
+   public visit<T extends StatementVisitor>(visitor: T): void {
+      visitor.visitLoop(this);
+   }
+
 }
 
 export interface IfElseArm {
@@ -278,6 +329,11 @@ export class IfElse implements Statement {
       this.elseIfs = elseIfs;
       this.elseArm = elseArm;
    }
+
+   public visit<T extends StatementVisitor>(visitor: T): void {
+      visitor.visitIfElse(this);
+   }
+
 }
 
 export class Return implements Statement {
@@ -286,6 +342,11 @@ export class Return implements Statement {
    constructor(value: Expression | undefined) {
       this.value = value;
    }
+
+   public visit<T extends StatementVisitor>(visitor: T): void {
+      visitor.visitReturn(this);
+   }
+
 }
 
 export interface WhenArm {
@@ -307,9 +368,47 @@ export class When implements Statement {
       this.arms = arms;
       this.elseArm = elseArm;
    }
+
+   public visit<T extends StatementVisitor>(visitor: T): void {
+      visitor.visitWhen(this);
+   }
+
+}
+
+export interface ExpressionVisitor {
+   visitArrayLiteral(array: ArrayLiteral): void;
+
+   visitBinary(binary: Binary): void;
+
+   visitBooleanNegate(booleanNegate: BooleanNegate): void;
+
+   visitBool(bool: BoolLiteral): void;
+
+   visitCall(call: Call): void;
+
+   visitChar(char: CharLiteral): void;
+
+   visitDouble(double: DoubleLiteral): void;
+
+   visitGenericName(name: GenericName): void;
+
+   visitIndex(index: Index): void;
+
+   visitInt(int: IntLiteral): void;
+
+   visitMember(member: Member): void;
+
+   visitPostfix(postfix: Postfix): void;
+
+   visitSimpleName(name: SimpleName): void;
+
+   visitString(string: StringLiteral): void;
+
+   visitStruct(struct: StructLiteral): void;
 }
 
 export interface Expression {
+   visit<T extends ExpressionVisitor>(visitor: T): void;
 }
 
 export interface StructLiteralField {
@@ -329,6 +428,10 @@ export class StructLiteral implements Expression {
       this.isMutable = isMutable;
       this.fields = fields;
    }
+
+   public visit<T extends ExpressionVisitor>(visitor: T): void {
+      visitor.visitStruct(this);
+   }
 }
 
 export class ArrayLiteral implements Expression {
@@ -337,6 +440,10 @@ export class ArrayLiteral implements Expression {
    constructor(values: Expression[]) {
       this.values = values;
    }
+
+   public visit<T extends ExpressionVisitor>(visitor: T): void {
+      visitor.visitArrayLiteral(this);
+   }
 }
 
 export enum ArithmeticOp {
@@ -344,8 +451,7 @@ export enum ArithmeticOp {
 }
 
 export enum BooleanOp {
-   GREATER = ArithmeticOp.SUBTRACT +
-             1, GREATER_EQUAL, SMALLER, SMALLER_EQUAL, EQUAL, NOT_EQUAL, AND, OR,
+   GREATER = ArithmeticOp.SUBTRACT + 1, GREATER_EQUAL, SMALLER, SMALLER_EQUAL, EQUAL, NOT_EQUAL, AND, OR,
 }
 
 export class Binary implements Expression {
@@ -362,6 +468,10 @@ export class Binary implements Expression {
       this.right = right;
       this.operator = operator;
    }
+
+   public visit<T extends ExpressionVisitor>(visitor: T): void {
+      visitor.visitBinary(this);
+   }
 }
 
 export class BooleanNegate implements Expression {
@@ -369,6 +479,10 @@ export class BooleanNegate implements Expression {
 
    constructor(value: Expression) {
       this.value = value;
+   }
+
+   public visit<T extends ExpressionVisitor>(visitor: T): void {
+      visitor.visitBooleanNegate(this);
    }
 }
 
@@ -383,6 +497,10 @@ export class Postfix implements Expression {
       this.left = left;
       this.operation = operation;
    }
+
+   public visit<T extends ExpressionVisitor>(visitor: T): void {
+      visitor.visitPostfix(this);
+   }
 }
 
 export class Call implements Expression {
@@ -390,6 +508,10 @@ export class Call implements Expression {
 
    constructor(values: Expression[]) {
       this.values = values;
+   }
+
+   public visit<T extends ExpressionVisitor>(visitor: T): void {
+      visitor.visitCall(this);
    }
 }
 
@@ -399,13 +521,21 @@ export class Index implements Expression {
    constructor(value: Expression) {
       this.value = value;
    }
+
+   public visit<T extends ExpressionVisitor>(visitor: T): void {
+      visitor.visitIndex(this);
+   }
 }
 
-export class Member {
+export class Member implements Expression {
    public right: SimpleName | GenericNamePart;
 
    constructor(right: SimpleName | GenericNamePart) {
       this.right = right;
+   }
+
+   public visit<T extends ExpressionVisitor>(visitor: T): void {
+      visitor.visitMember(this);
    }
 }
 
@@ -415,6 +545,10 @@ export class BoolLiteral implements Expression {
    constructor(value: boolean) {
       this.value = value;
    }
+
+   public visit<T extends ExpressionVisitor>(visitor: T): void {
+      visitor.visitBool(this);
+   }
 }
 
 export class StringLiteral implements Expression {
@@ -422,6 +556,10 @@ export class StringLiteral implements Expression {
 
    constructor(value: string) {
       this.value = value;
+   }
+
+   public visit<T extends ExpressionVisitor>(visitor: T): void {
+      visitor.visitString(this);
    }
 }
 
@@ -431,6 +569,10 @@ export class CharLiteral implements Expression {
    constructor(value: string) {
       this.value = value;
    }
+
+   public visit<T extends ExpressionVisitor>(visitor: T): void {
+      visitor.visitChar(this);
+   }
 }
 
 export class IntLiteral implements Expression {
@@ -438,6 +580,10 @@ export class IntLiteral implements Expression {
 
    constructor(value: number) {
       this.value = value;
+   }
+
+   public visit<T extends ExpressionVisitor>(visitor: T): void {
+      visitor.visitInt(this);
    }
 }
 
@@ -447,6 +593,10 @@ export class DoubleLiteral implements Expression {
    constructor(value: number) {
       this.value = value;
    }
+
+   public visit<T extends ExpressionVisitor>(visitor: T): void {
+      visitor.visitDouble(this);
+   }
 }
 
 export class SimpleName implements Expression {
@@ -455,9 +605,14 @@ export class SimpleName implements Expression {
    constructor(value: string) {
       this.value = value;
    }
+
+   public visit<T extends ExpressionVisitor>(visitor: T): void {
+      visitor.visitSimpleName(this);
+   }
 }
 
 export interface GenericNamePart {
+   referencing?: SymbolTree | undefined;
    name: SimpleName;
    generics: GenericName[];
 }
@@ -467,5 +622,17 @@ export class GenericName implements Expression {
 
    constructor(parts: GenericNamePart[]) {
       this.parts = parts;
+   }
+
+   public visit<T extends ExpressionVisitor>(visitor: T): void {
+      visitor.visitGenericName(this);
+   }
+
+   /**
+    * Generate a string array that can be used in the SymbolTree
+    */
+   public toPathString(): string[] {
+      return this.parts.map(
+         it => it.name.value);
    }
 }

@@ -27,8 +27,7 @@ import {
    Index,
    Interface,
    InterfaceFunction,
-   IntLiteral,
-   Loop, Member,
+   IntLiteral, Loop, Member,
    Postfix,
    Return,
    SimpleName,
@@ -51,18 +50,13 @@ export interface Parser {
    currentIdx: number;
 }
 
-export function parseFile(
-   fileName: string,
-   contents: string,
-): TexelFile {
+export function parseFile(fileName: string, contents: string): TexelFile {
    let tokens = getTokens(fileName, contents);
 
    // Filter out comments for now.
-   tokens = tokens.filter(
-      it => {
-         return it.type !== TokenType.COMMENT;
-      });
-
+   tokens = tokens.filter(it => {
+      return it.type !== TokenType.COMMENT;
+   });
 
    const info: Parser = {
       tokens,
@@ -97,10 +91,7 @@ function getNext(parser: Parser): Token | undefined {
    }
 }
 
-function throwError(
-   parser: Parser,
-   expectedType: TokenType,
-): never {
+function throwError(parser: Parser, expectedType: TokenType): never {
    const peeked = peek(parser);
 
    let next = "";
@@ -114,10 +105,7 @@ function throwError(
    throw new Error(`Expected ${ expectedType } but found ${ next } at ${ peeked.sourcePosition.fileName }::${ peeked.sourcePosition.lineIdx }.`);
 }
 
-function consume(
-   parser: Parser,
-   type: TokenType,
-): boolean {
+function consume(parser: Parser, type: TokenType): boolean {
    if (peekType(parser) !== type) {
       return false;
    } else {
@@ -126,19 +114,13 @@ function consume(
    }
 }
 
-function consumeOrThrow(
-   parser: Parser,
-   expectedType: TokenType,
-) {
+function consumeOrThrow(parser: Parser, expectedType: TokenType) {
    if (!consume(parser, expectedType)) {
       throwError(parser, expectedType);
    }
 }
 
-function expectOrThrow(
-   parser: Parser,
-   type: TokenType,
-) {
+function expectOrThrow(parser: Parser, type: TokenType) {
    if (peekType(parser) != type) {
       throwError(parser, type);
    }
@@ -182,10 +164,7 @@ function loopTill(
    }
 }
 
-function checkComma(
-   parser: Parser,
-   ...tokens: TokenType[]
-): void {
+function checkComma(parser: Parser, ...tokens: TokenType[]): void {
    if ([TokenType.COMMA, ...tokens].includes(peekType(parser))) {
       consume(parser, TokenType.COMMA);
    } else {
@@ -199,24 +178,22 @@ function parseTexelFile(parser: Parser): TexelFile {
    let exports: ExportDeclaration[] = [];
 
    loopTill(parser, {
-         condition: "not-in",
-         tokens: [TokenType.EOF],
-      },
-      type => {
-         switch (type) {
-            case TokenType.IMPORT:
-               imports.push(parseImport(parser));
-               break;
-            case TokenType.EXPORT:
-               exports = parseExport(parser);
-               return true;
-            default:
-               declarations.push(parseDeclaration(parser));
-               break;
-         }
-         return false;
-      },
-   );
+      condition: "not-in",
+      tokens: [TokenType.EOF],
+   }, type => {
+      switch (type) {
+         case TokenType.IMPORT:
+            imports.push(parseImport(parser));
+            break;
+         case TokenType.EXPORT:
+            exports = parseExport(parser);
+            return true;
+         default:
+            declarations.push(parseDeclaration(parser));
+            break;
+      }
+      return false;
+   });
 
    return new TexelFile(imports, declarations, exports);
 }
@@ -227,24 +204,22 @@ function parseImport(parser: Parser): ImportDeclaration {
    const names: SimpleName[] = [];
 
    loopTill(parser, {
-         condition: "not-in",
-         tokens: [TokenType.SEMICOLON],
-      },
-      type => {
-         if (type === TokenType.IDENTIFIER) {
-            names.push(new SimpleName(getNext(parser)!.value));
-         } else if (type === TokenType.STAR) {
-            names.push(new SimpleName("*"));
-            getNext(parser);
-            return true;
-         } else {
-            expectOrThrow(parser, TokenType.IDENTIFIER);
-         }
+      condition: "not-in",
+      tokens: [TokenType.SEMICOLON],
+   }, type => {
+      if (type === TokenType.IDENTIFIER) {
+         names.push(new SimpleName(getNext(parser)!.value));
+      } else if (type === TokenType.STAR) {
+         names.push(new SimpleName("*"));
+         getNext(parser);
+         return true;
+      } else {
+         expectOrThrow(parser, TokenType.IDENTIFIER);
+      }
 
-         // Return from `loopTill` if we can't get another nested identifier.
-         return !consume(parser, TokenType.DOT);
-      },
-   );
+      // Return from `loopTill` if we can't get another nested identifier.
+      return !consume(parser, TokenType.DOT);
+   });
    consumeOrThrow(parser, TokenType.SEMICOLON);
 
    return new ImportDeclaration(names);
@@ -264,24 +239,22 @@ function parseExport(parser: Parser): ExportDeclaration[] {
       const names: SimpleName[] = [];
 
       loopTill(parser, {
-            condition: "not-in",
-            tokens: [TokenType.DOT],
-         },
-         type => {
-            if (type === TokenType.IDENTIFIER) {
-               names.push(new SimpleName(getNext(parser)!.value));
-            } else if (type === TokenType.STAR) {
-               names.push(new SimpleName("*"));
-               getNext(parser);
-               return true;
-            } else {
-               expectOrThrow(parser, TokenType.IDENTIFIER);
-            }
+         condition: "not-in",
+         tokens: [TokenType.DOT],
+      }, type => {
+         if (type === TokenType.IDENTIFIER) {
+            names.push(new SimpleName(getNext(parser)!.value));
+         } else if (type === TokenType.STAR) {
+            names.push(new SimpleName("*"));
+            getNext(parser);
+            return true;
+         } else {
+            expectOrThrow(parser, TokenType.IDENTIFIER);
+         }
 
-            // Return from `loopTill` if we can't get another nested identifier.
-            return !consume(parser, TokenType.DOT);
-         },
-      );
+         // Return from `loopTill` if we can't get another nested identifier.
+         return !consume(parser, TokenType.DOT);
+      });
 
       exports.push(new ExportDeclaration(names));
 
@@ -429,41 +402,38 @@ function parseStruct(parser: Parser): Declaration {
    consumeOrThrow(parser, TokenType.LEFT_CURLY_BRACKET);
 
    loopTill(parser, {
-         condition: "not-in",
-         tokens: [TokenType.RIGHT_CURLY_BRACKET],
-      },
-      type => {
-         if ([TokenType.STRUCT, TokenType.CLOSED].includes(type)) {
-            innerStructs.push(parseStruct(parser) as Struct);
-         } else {
-            const isMutable = consume(parser, TokenType.MUT);
-            const type = parseFullGenericName(parser);
+      condition: "not-in",
+      tokens: [TokenType.RIGHT_CURLY_BRACKET],
+   }, type => {
+      if ([TokenType.STRUCT, TokenType.CLOSED].includes(type)) {
+         innerStructs.push(parseStruct(parser) as Struct);
+      } else {
+         const isMutable = consume(parser, TokenType.MUT);
+         const type = parseFullGenericName(parser);
 
-            const isArray = consume(parser, TokenType.LEFT_BRACKET);
-            if (isArray) {
-               consumeOrThrow(parser, TokenType.RIGHT_BRACKET);
-            }
-
-            expectOrThrow(parser, TokenType.IDENTIFIER);
-            const name = new SimpleName(getNext(parser)!.value);
-
-            const expr = consume(parser, TokenType.EQUAL) ? parseExpression(parser)
-                                                          : undefined;
-
-            consumeOrThrow(parser, TokenType.SEMICOLON);
-
-            fields.push({
-               isMutable,
-               type,
-               isArray,
-               name,
-               initializer: expr,
-            });
+         const isArray = consume(parser, TokenType.LEFT_BRACKET);
+         if (isArray) {
+            consumeOrThrow(parser, TokenType.RIGHT_BRACKET);
          }
 
-         return false;
-      },
-   );
+         expectOrThrow(parser, TokenType.IDENTIFIER);
+         const name = new SimpleName(getNext(parser)!.value);
+
+         const expr = consume(parser, TokenType.EQUAL) ? parseExpression(parser) : undefined;
+
+         consumeOrThrow(parser, TokenType.SEMICOLON);
+
+         fields.push({
+            isMutable,
+            type,
+            isArray,
+            name,
+            initializer: expr,
+         });
+      }
+
+      return false;
+   });
 
    consumeOrThrow(parser, TokenType.RIGHT_CURLY_BRACKET);
 
@@ -480,8 +450,12 @@ function parseFunction(parser: Parser): Declaration {
    const parameters = parseFunctionParameters(parser);
    const returnType = parseFunctionReturnType(parser);
 
-   return new FunctionDecl(isMutable, genericDeclaration,
-      name, parameters, returnType, parseBlock(parser, false),
+   return new FunctionDecl(isMutable,
+      genericDeclaration,
+      name,
+      parameters,
+      returnType,
+      parseBlock(parser, false),
    );
 }
 
@@ -547,31 +521,26 @@ function parseEnum(parser: Parser): Declaration {
    consumeOrThrow(parser, TokenType.LEFT_CURLY_BRACKET);
 
    loopTill(parser, {
-         condition: "not-in",
-         tokens: [TokenType.RIGHT_CURLY_BRACKET],
-      },
-      type => {
-         if (type !== TokenType.IDENTIFIER) {
-            throwError(parser, TokenType.IDENTIFIER);
-         }
+      condition: "not-in",
+      tokens: [TokenType.RIGHT_CURLY_BRACKET],
+   }, type => {
+      if (type !== TokenType.IDENTIFIER) {
+         throwError(parser, TokenType.IDENTIFIER);
+      }
 
-         values.push(new SimpleName(getNext(parser)!.value));
+      values.push(new SimpleName(getNext(parser)!.value));
 
-         checkComma(parser, TokenType.RIGHT_CURLY_BRACKET);
+      checkComma(parser, TokenType.RIGHT_CURLY_BRACKET);
 
-         return false;
-      },
-   );
+      return false;
+   });
 
    consumeOrThrow(parser, TokenType.RIGHT_CURLY_BRACKET);
 
    return new Enum(name, values);
 }
 
-function parseBlock(
-   parser: Parser,
-   isInLoop: boolean,
-): Statement[] {
+function parseBlock(parser: Parser, isInLoop: boolean): Statement[] {
    const result: Statement[] = [];
 
    consumeOrThrow(parser, TokenType.LEFT_CURLY_BRACKET);
@@ -590,10 +559,7 @@ function parseBlock(
    return result;
 }
 
-function parseStatement(
-   parser: Parser,
-   isInLoop: boolean,
-): Statement {
+function parseStatement(parser: Parser, isInLoop: boolean): Statement {
    const peekedType = peekType(parser);
 
    switch (peekedType) {
@@ -618,7 +584,7 @@ function parseStatement(
 
          if (expr instanceof GenericName || expr instanceof SimpleName) {
             if (localPeekType() === TokenType.LEFT_BRACKET && parser.tokens[idx + 1].type ===
-                TokenType.RIGHT_BRACKET) {
+               TokenType.RIGHT_BRACKET) {
                const next = (parser.tokens[idx + 2] || { type: TokenType.EOF }).type;
                if (next === TokenType.IDENTIFIER) {
                   return finishParseVariableDeclaration(parser, false, expr);
@@ -737,10 +703,7 @@ function parseLoop(parser: Parser): Statement {
    return new Loop(condition, block);
 }
 
-function parseIfElse(
-   parser: Parser,
-   isInLoop: boolean,
-): Statement {
+function parseIfElse(parser: Parser, isInLoop: boolean): Statement {
    consumeOrThrow(parser, TokenType.IF);
    consumeOrThrow(parser, TokenType.LEFT_PARENTHESIS);
 
@@ -796,10 +759,7 @@ function parseReturn(parser: Parser): Statement {
    }
 }
 
-function parseWhen(
-   parser: Parser,
-   isInLoop: boolean,
-): Statement {
+function parseWhen(parser: Parser, isInLoop: boolean): Statement {
    consumeOrThrow(parser, TokenType.WHEN);
    consumeOrThrow(parser, TokenType.LEFT_PARENTHESIS);
 
@@ -919,10 +879,7 @@ function parseArrayLiteral(parser: Parser): Expression {
    return new ArrayLiteral(values);
 }
 
-function parseBinary(
-   parser: Parser,
-   fromIndex: number,
-): Expression {
+function parseBinary(parser: Parser, fromIndex: number): Expression {
    const sortedOperators = [
       TokenType.STAR,
       TokenType.SLASH,
@@ -991,29 +948,27 @@ function parsePostfix(parser: Parser): Expression {
    }
 
    loopTill(parser, {
-         condition: "in",
-         tokens: [TokenType.LEFT_PARENTHESIS, TokenType.LEFT_BRACKET, TokenType.DOT],
-      },
-      type => {
-         switch (type) {
-            case TokenType.LEFT_PARENTHESIS:
-               consumeOrThrow(parser, TokenType.LEFT_PARENTHESIS);
-               primary = new Postfix(primary, finishParseCall(parser));
-               return false;
-            case TokenType.LEFT_BRACKET:
-               consumeOrThrow(parser, TokenType.LEFT_BRACKET);
-               primary = new Postfix(primary, finishParseIndex(parser));
-               return false;
-            case TokenType.DOT:
-               consumeOrThrow(parser, TokenType.DOT);
-               const part = finishParseMember(parser);
-               primary = new Postfix(primary, new Member(part));
-               return false;
-            default:
-               return true;
-         }
-      },
-   );
+      condition: "in",
+      tokens: [TokenType.LEFT_PARENTHESIS, TokenType.LEFT_BRACKET, TokenType.DOT],
+   }, type => {
+      switch (type) {
+         case TokenType.LEFT_PARENTHESIS:
+            consumeOrThrow(parser, TokenType.LEFT_PARENTHESIS);
+            primary = new Postfix(primary, finishParseCall(parser));
+            return false;
+         case TokenType.LEFT_BRACKET:
+            consumeOrThrow(parser, TokenType.LEFT_BRACKET);
+            primary = new Postfix(primary, finishParseIndex(parser));
+            return false;
+         case TokenType.DOT:
+            consumeOrThrow(parser, TokenType.DOT);
+            const part = finishParseMember(parser);
+            primary = new Postfix(primary, new Member(part));
+            return false;
+         default:
+            return true;
+      }
+   });
 
    return primary;
 }
@@ -1095,10 +1050,7 @@ function parseIdentifier(parser: Parser): SimpleName | GenericNamePart {
    }
 }
 
-function parseGenericPart(
-   parser: Parser,
-   identifier: SimpleName,
-): GenericNamePart {
+function parseGenericPart(parser: Parser, identifier: SimpleName): GenericNamePart {
    const generics: GenericName[] = [];
 
    consumeOrThrow(parser, TokenType.SMALLER);
@@ -1154,10 +1106,7 @@ function parseGenericPart(
  * @param parser
  * @param startIdx
  */
-function canParseGenericPart(
-   parser: Parser,
-   startIdx: number,
-): number {
+function canParseGenericPart(parser: Parser, startIdx: number): number {
    const localPeek = () => parser.tokens[startIdx];
    const localPeekType = () => localPeek().type;
    const localGetNext = () => parser.tokens[startIdx++];

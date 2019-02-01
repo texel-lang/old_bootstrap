@@ -65,28 +65,25 @@ import { SymbolTree, SymbolType } from "../utils/SymbolTree";
 // ]);
 
 function calculateGenericNestingDepth(name: GenericName): number {
-   return name.parts.reduce((
-      previousValue,
-      currentValue,
-   ) => {
+   return name.parts.reduce((previousValue, currentValue) => {
       if (currentValue.generics.length === 0) {
          return previousValue;
       } else {
-         return previousValue + (currentValue.generics.map(
-            it => calculateGenericNestingDepth(it))).reduce((
-            max,
-            newOne,
-         ) => Math.max(max, newOne), 0);
+         return previousValue +
+            (currentValue.generics.map(it => calculateGenericNestingDepth(it))).reduce((max,
+               newOne,
+            ) => Math.max(max, newOne), 0);
       }
    }, 1);
 }
 
 function createPlainFromGeneric(name: GenericName): string[] {
-   return name.parts.map(
-      part => {
-         return `${ part.name.value }_${ part.generics.map(
-            generic => createPlainFromGeneric(generic).join("___")).join("__") }`;
-      });
+   return name.parts.map(part => {
+      return `${ part.name.value }_${ part.generics.map(
+         generic => createPlainFromGeneric(generic)
+         .join("___"))
+                                          .join("__") }`;
+   });
 }
 
 export function registerInternals(rootSymbol: SymbolTree) {

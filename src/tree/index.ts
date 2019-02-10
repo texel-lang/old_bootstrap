@@ -241,10 +241,10 @@ export class Variable implements Statement {
 }
 
 export class Assignment implements Statement {
-   public name: SimpleName | Index;
+   public name: SimpleName | Postfix;
    public value: Expression;
 
-   constructor(name: SimpleName | Index, value: Expression) {
+   constructor(name: SimpleName | Postfix, value: Expression) {
       this.name = name;
       this.value = value;
    }

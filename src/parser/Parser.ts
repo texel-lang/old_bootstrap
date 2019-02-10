@@ -26,8 +26,7 @@ import {
    ImportDeclaration,
    Index,
    Interface,
-   InterfaceFunction,
-   IntLiteral, Loop, Member,
+   InterfaceFunction, IntLiteral, Loop, Member,
    Postfix,
    Return,
    SimpleName,
@@ -648,7 +647,8 @@ function finishParseExpressionOrAssignment(
    parser: Parser,
    leftHandExpr: Expression,
 ): Statement {
-   if (leftHandExpr instanceof SimpleName || leftHandExpr instanceof Index) {
+   if (leftHandExpr instanceof SimpleName ||
+      (leftHandExpr instanceof Postfix && !(leftHandExpr.operation instanceof Call))) {
 
       if (consume(parser, TokenType.EQUAL)) {
          const expr = parseExpression(parser);

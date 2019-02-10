@@ -1,8 +1,9 @@
 import { parseFile } from "../parser";
-import { TexelFile } from "../tree";
+import { FunctionDecl, TexelFile } from "../tree";
 import { consoleObject, readFileOrDirectory, TexelFileInfo } from "../utils";
 import { SymbolTree, SymbolType } from "../utils/SymbolTree";
 import { processSymbolsForSource } from "./symbols";
+import { VariableNameCheck } from "./VariableNameCheck";
 
 export interface CompileInfo {
    source: TexelFileInfo,
@@ -22,10 +23,16 @@ export function compile(compilePath: string) {
    sources.forEach(it => {
       const symbol = mapFile(compilePath, rootSymbol, it);
       processSymbolsForSource(symbol);
+
+      const funcs = symbol.queryForSymbolType(SymbolType.FUNCTION);
+      funcs.forEach(it => {
+         const variableNameCheck = new VariableNameCheck(symbol, it as FunctionDecl);
+         variableNameCheck.check();
+      });
    });
 
    rootSymbol.debugSymbolNameStructure();
-   // consoleObject(rootSymbol.children.map(it => it.value), 7);
+   consoleObject(sources[0].tree, 32);
 }
 
 function mapFile(compilePath: string, rootSymbol: SymbolTree, file: CompileInfo): SymbolTree {

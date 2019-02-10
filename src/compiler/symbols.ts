@@ -1,15 +1,14 @@
 import {
-   Alias,
+   Alias, Assignment, Break, Continue,
    DeclarationVisitor,
-   Enum,
+   Enum, ExpressionStmt,
    FunctionDecl,
    GenericDeclaration,
-   GenericName,
-   Interface,
+   GenericName, IfElse,
+   Interface, Loop, Return, StatementVisitor,
    Struct,
-   TexelFile,
+   TexelFile, Variable, When,
 } from "../tree";
-import { isNil } from "../utils";
 import { SymbolTree, SymbolType } from "../utils/SymbolTree";
 import { registerInternals } from "./utils";
 
@@ -113,10 +112,9 @@ function resolveFunction(fileSymbol: SymbolTree, func: FunctionDecl) {
    func.parameters.forEach(it => addSymbolsToGenericName(fileSymbol, it.type));
 
    addSymbolsToGenericName(fileSymbol, func.returnType.name);
-   // TODO: Walk body
-   // Resolve variable symbols
-   // Add expected symbol to expression
-   // Check if expression is expected symbol
+
+   const variableResolver = new SymbolResolver(fileSymbol);
+   func.body.forEach(it => it.visit(variableResolver));
 }
 
 function resolveInterface(fileSymbol: SymbolTree, interfaceDecl: Interface) {
@@ -139,10 +137,54 @@ function resolveEnum(fileSymbol: SymbolTree, enumaration: Enum) {
 function addSymbolsToGenericName(rootSymbol: SymbolTree, name: GenericName) {
    name.parts.forEach(it => {
       it.referencing = rootSymbol.findChildAtPath([it.name.value]);
-      if (isNil(it.referencing) || it.referencing.type === SymbolType.UNKNOWN) {
+      if (it.referencing.type === SymbolType.UNKNOWN) {
          throw new Error(`Undefined Symbol used: ${ it.name.value }.`);
       }
 
       it.generics.forEach(generic => addSymbolsToGenericName(it.referencing!, generic));
    });
+}
+
+class SymbolResolver implements StatementVisitor {
+   constructor(public symbol: SymbolTree) {
+   }
+
+   public visitAssignment(assignment: Assignment): void {
+
+   }
+
+   public visitBreak(breakStmt: Break): void {
+   }
+
+   public visitContinue(continueStmt: Continue): void {
+   }
+
+   public visitExpression(expr: ExpressionStmt): void {
+   }
+
+   public visitIfElse(ifElse: IfElse): void {
+      ifElse.ifArm.block.forEach(it => it.visit(this));
+      ifElse.elseIfs.forEach(it => it.block.forEach(stmt => stmt.visit(this)));
+      ifElse.elseArm.forEach(it => it.visit(this));
+   }
+
+   public visitLoop(loop: Loop): void {
+      loop.block.forEach(it => it.visit(this));
+   }
+
+   public visitReturn(returnStmt: Return): void {
+   }
+
+   public visitVariable(variable: Variable): void {
+      addSymbolsToGenericName(this.symbol, variable.type);
+   }
+
+   public visitWhen(when: When): void {
+      when.arms.forEach(it => {
+         if (Array.isArray(it.block)) {
+            it.block.forEach(stmt => stmt.visit(this));
+         }
+      });
+   }
+
 }

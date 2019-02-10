@@ -94,4 +94,5 @@ export function registerInternals(rootSymbol: SymbolTree) {
    rootSymbol.addValueToPath(["string"], SymbolType.VIRTUAL, SymbolType.STRUCT);
    rootSymbol.addValueToPath(["int"], SymbolType.VIRTUAL, SymbolType.STRUCT);
    rootSymbol.addValueToPath(["double"], SymbolType.VIRTUAL, SymbolType.STRUCT);
+   rootSymbol.addValueToPath(["println"], SymbolType.VIRTUAL, SymbolType.FUNCTION);
 }

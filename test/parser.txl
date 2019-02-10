@@ -13,16 +13,16 @@ struct Vector {
 
 fn Direction.opposite(): Direction {
     when (this) {
-        NORTH :: {
+        Direction.NORTH :: {
             return Direction.SOUTH;
         },
-        EAST :: {
+        Direction.EAST :: {
             return Direction.WEST;
         },
-        SOUTH :: {
+        Direction.SOUTH :: {
             return Direction.NORTH;
         },
-        WEST :: {
+        Direction.WEST :: {
             return Direction.EAST;
         },
 
@@ -45,6 +45,4 @@ fn main(): void {
         .x = 4.5,
         .y = 2.3,
     };
-
-    console.log(v.dir.opposite());
 }

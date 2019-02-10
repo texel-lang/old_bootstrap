@@ -13,6 +13,10 @@ export class Stack<T> {
       return this.items.pop()!!;
    }
 
+   /**
+    * Find the T on the stack which is found by returning true from the predicate
+    * @param predicate
+    */
    public find(predicate: (value: T) => boolean): T | undefined {
       for (let i = this.items.length - 1; i >= 0; --i) {
          if (predicate(this.items[i])) {

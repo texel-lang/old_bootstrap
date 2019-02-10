@@ -63,4 +63,28 @@ export class SymbolTree {
       console.log(indent, this.path);
       this.children.forEach(it => it.debugSymbolNameStructure(indent + "-"));
    }
+
+   public queryForSymbolType<T extends SymbolValue>(type: SymbolType): T[] {
+      const result: T[] = [];
+      if (this.type === type) {
+         result.push(this.value as T);
+      }
+      this.children.forEach(it => {
+         result.push(...(it.queryForSymbolType(type) as T[]));
+      });
+
+      return result;
+   }
+
+   public queryVirtualNameForSymbolType(type: SymbolType): string[] {
+      const result: string[] = [];
+      if (this.type === SymbolType.VIRTUAL && this.value === type) {
+         result.push(this.path);
+      }
+      this.children.forEach(it => {
+         result.push(...(it.queryVirtualNameForSymbolType(type)));
+      });
+
+      return result;
+   }
 }
